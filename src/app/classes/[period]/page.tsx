@@ -25,7 +25,7 @@ export default function ClassDetailPage() {
         <>
           <section className="mb-6 grid gap-4 md:grid-cols-4">
             <StatCard label="Students" value={summary.studentCount} />
-            <StatCard label="Average score" value={`${summary.averageScore}/20`} />
+            <StatCard label="Average score" value={`${summary.averagePercent}%`} detail={`${summary.averageScore} avg points`} />
             <StatCard label="Weakest skill" value={summary.weakestSkill} />
             <StatCard label="Enrichment" value={summary.enrichmentCount} />
           </section>
@@ -66,8 +66,15 @@ export default function ClassDetailPage() {
               <thead><tr><th>Question</th><th>Skill</th><th>Zone</th><th>% Correct</th><th>Critical</th></tr></thead>
               <tbody>
                 {questions.map((question) => {
-                  const correct = students.filter((student) => Number(student.answers[question.question_id]) > 0).length;
-                  const percent = students.length ? Math.round((correct / students.length) * 100) : 0;
+                  const correct = students.reduce((sum, student) => {
+                    const attempted = student.attemptedQuestions?.[question.question_id] ?? true;
+                    return sum + (student.incomplete || !attempted ? 0 : Number(student.answers[question.question_id] ?? 0));
+                  }, 0);
+                  const possible = students.reduce((sum, student) => {
+                    const attempted = student.attemptedQuestions?.[question.question_id] ?? true;
+                    return sum + (student.incomplete || !attempted ? 0 : (student.possiblePoints?.[question.question_id] ?? question.points_possible ?? 1));
+                  }, 0);
+                  const percent = possible ? Math.round((correct / possible) * 1000) / 10 : 0;
                   return <tr key={question.question_id}><td>{question.question_id}</td><td>{question.skill}</td><td>{question.zone}</td><td><span className={`rounded-full px-3 py-1 font-black ${masteryColor(percent)}`}>{percent}%</span></td><td>{question.critical ? "Yes" : "No"}</td></tr>;
                 })}
               </tbody>
@@ -80,7 +87,7 @@ export default function ClassDetailPage() {
               <table>
                 <thead><tr><th>Student</th><th>Score</th><th>Band</th><th>Flags</th></tr></thead>
                 <tbody>
-                  {students.map((student) => <tr key={student.student_id}><td><Link className="font-black underline" href={`/students/${student.student_id}`}>{student.first_name} {student.last_name}</Link></td><td>{student.totalScore}/20</td><td><Badge tone={bandTone(student.readinessBand)}>{student.readinessBand}</Badge></td><td>{student.interventionFlags.join(", ") || (student.enrichment ? "Enrichment" : "None")}</td></tr>)}
+                  {students.map((student) => <tr key={student.student_id}><td><Link className="font-black underline" href={`/students/${student.student_id}`}>{student.first_name} {student.last_name}</Link></td><td>{student.incomplete ? "No data" : `${student.totalScore}/${student.totalPossible}`}</td><td><Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge></td><td>{student.incomplete ? "No Data / Not Started" : student.interventionFlags.join(", ") || (student.enrichment ? "Enrichment" : "None")}</td></tr>)}
                 </tbody>
               </table>
             </Card>

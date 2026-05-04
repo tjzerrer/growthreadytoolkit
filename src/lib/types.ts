@@ -21,10 +21,22 @@ export type ClassPeriod = {
 
 export type DiagnosticResult = Student & {
   answers: Record<string, number>;
+  possiblePoints?: Record<string, number>;
+  attemptedQuestions?: Record<string, boolean>;
+  totalPointsEarned?: number;
+  totalPointsPossible?: number;
+  attemptedQuestionCount?: number;
+  incomplete?: boolean;
+  source?: "simple" | "myopenmath";
+  email?: string;
+  student_name?: string;
 };
 
 export type QuestionMapItem = {
   question_id: string;
+  question_label?: string;
+  myopenmath_question_id?: string;
+  points_possible?: number;
   skill: string;
   teks: string;
   zone: string;
@@ -71,6 +83,12 @@ export type SkillMastery = {
 
 export type StudentProfile = Student & {
   answers: Record<string, number>;
+  possiblePoints?: Record<string, number>;
+  attemptedQuestions?: Record<string, boolean>;
+  attemptedQuestionCount: number;
+  incomplete: boolean;
+  email?: string;
+  student_name?: string;
   totalScore: number;
   totalPossible: number;
   percentage: number;
@@ -99,11 +117,39 @@ export type InterventionGroup = {
   suggestedActivity: string;
 };
 
+export type MyOpenMathDetectedQuestion = {
+  question_id: string;
+  question_label: string;
+  myopenmath_question_id: string;
+  points_possible: number;
+  pointsColumnIndex: number;
+  timeSpentColumnIndex?: number;
+};
+
+export type MyOpenMathPreviewStudent = {
+  student_name: string;
+  section: string;
+  email: string;
+  attemptedQuestionCount: number;
+  totalPointsEarned: number;
+  totalPointsPossible: number;
+  percentScore: number;
+  incomplete: boolean;
+};
+
+export type MyOpenMathParseResult = {
+  diagnostics: DiagnosticResult[];
+  detectedQuestions: MyOpenMathDetectedQuestion[];
+  previewStudents: MyOpenMathPreviewStudent[];
+  errors: string[];
+};
+
 export type ClassSummary = {
   period: string;
   label: string;
   studentCount: number;
   averageScore: number;
+  averagePercent: number;
   medianScore: number;
   foundationsMissingPct: number;
   enteringPct: number;
@@ -120,6 +166,7 @@ export type OverallSummary = {
   totalStudents: number;
   classCount: number;
   averageDiagnosticScore: number;
+  averageDiagnosticPercent: number;
   foundationsMissingPct: number;
   algebraReadyPct: number;
   weakestSkillOverall: string;

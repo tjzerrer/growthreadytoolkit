@@ -34,12 +34,12 @@ export default function StudentsPage() {
           </div>
           <div className="card table-wrap rounded-3xl">
             <table>
-              <thead><tr><th>Name</th><th>ID</th><th>Class</th><th>Score</th><th>Band</th><th>Strongest</th><th>Weakest</th><th>Flags</th><th>Enrichment</th></tr></thead>
+              <thead><tr><th>Name</th><th>Class</th><th>Score</th><th>Band</th><th>Strongest</th><th>Weakest</th><th>Flags</th><th>Enrichment</th></tr></thead>
               <tbody>
                 {students.map((student) => (
                   <tr key={student.student_id}>
                     <td><Link className="font-black text-[#174a36] underline" href={`/students/${student.student_id}`}>{student.first_name} {student.last_name}</Link></td>
-                    <td>{student.student_id}</td><td>{student.class_period}</td><td>{student.totalScore}/20</td><td><Badge tone={bandTone(student.readinessBand)}>{student.readinessBand}</Badge></td><td>{student.strongestSkill}</td><td>{student.weakestSkill}</td><td>{student.interventionFlags.join(", ") || "None"}</td><td>{student.enrichment ? "Yes" : "No"}</td>
+                    <td>{student.class_period}</td><td>{student.incomplete ? "No data" : `${student.totalScore}/${student.totalPossible}`}</td><td><Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge></td><td>{student.strongestSkill}</td><td>{student.weakestSkill}</td><td>{student.incomplete ? "No Data / Not Started" : student.interventionFlags.join(", ") || "None"}</td><td>{student.enrichment ? "Yes" : "No"}</td>
                   </tr>
                 ))}
               </tbody>

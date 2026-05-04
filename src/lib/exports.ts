@@ -24,6 +24,7 @@ export function exportClassSummary(data: DerivedData) {
       class_period: item.period,
       students: item.studentCount,
       average_score: item.averageScore,
+      average_percent: item.averagePercent,
       median_score: item.medianScore,
       foundations_missing_pct: item.foundationsMissingPct,
       entering_algebra_pct: item.enteringPct,

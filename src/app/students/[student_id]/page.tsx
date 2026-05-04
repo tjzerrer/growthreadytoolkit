@@ -30,7 +30,7 @@ export default function StudentProfilePage() {
             <StatCard label="Class period" value={student.class_period} />
             <StatCard label="Diagnostic" value={`${student.totalScore}/${student.totalPossible}`} detail={`${student.percentage}%`} />
             <StatCard label="A-F equivalent" value={student.letterGrade} />
-            <StatCard label="Readiness" value={<Badge tone={bandTone(student.readinessBand)}>{student.readinessBand}</Badge>} />
+            <StatCard label="Readiness" value={<Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge>} />
           </section>
 
           <section className="mb-6 grid gap-4 lg:grid-cols-2">
@@ -38,6 +38,8 @@ export default function StudentProfilePage() {
               <h2 className="mb-3 text-xl font-black text-[#174a36]">Instructional profile</h2>
               <p><strong>Strongest zone:</strong> {student.strongestZone}</p>
               <p><strong>Weakest zone:</strong> {student.weakestZone}</p>
+              {student.email ? <p><strong>Email:</strong> {student.email}</p> : null}
+              <p><strong>Attempted questions:</strong> {student.attemptedQuestionCount}</p>
               <p><strong>Missed critical questions:</strong> {student.missedCriticalQuestions.join(", ") || "None"}</p>
               <p><strong>Intervention flags:</strong> {student.interventionFlags.join(", ") || "None"}</p>
               <p><strong>Enrichment:</strong> {student.enrichment ? "Yes" : "No"}</p>

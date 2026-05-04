@@ -28,7 +28,7 @@ export default function ClassesPage() {
                 {data.classes.map((item) => (
                   <tr key={item.period}>
                     <td><Link className="font-black text-[#174a36] underline" href={`/classes/${encodeURIComponent(item.period)}`}>{item.label}</Link></td>
-                    <td>{item.studentCount}</td><td>{item.averageScore}/20</td><td>{item.medianScore}</td><td>{item.foundationsMissingPct}%</td><td>{item.enteringPct}%</td><td>{item.algebraReadyPct}%</td><td>{item.meetsMastersPct}%</td><td>{item.weakestSkill}</td><td>{item.strongestSkill}</td><td>{item.interventionCount}</td><td>{item.enrichmentCount}</td>
+                    <td>{item.studentCount}</td><td>{item.averagePercent}%</td><td>{item.medianScore}</td><td>{item.foundationsMissingPct}%</td><td>{item.enteringPct}%</td><td>{item.algebraReadyPct}%</td><td>{item.meetsMastersPct}%</td><td>{item.weakestSkill}</td><td>{item.strongestSkill}</td><td>{item.interventionCount}</td><td>{item.enrichmentCount}</td>
                   </tr>
                 ))}
               </tbody>

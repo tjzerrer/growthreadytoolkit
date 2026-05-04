@@ -26,7 +26,7 @@ export default function Home() {
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total students" value={data.summary.totalStudents} />
           <StatCard label="Classes" value={data.summary.classCount} />
-          <StatCard label="Avg diagnostic" value={`${data.summary.averageDiagnosticScore}/20`} />
+          <StatCard label="Avg diagnostic" value={`${data.summary.averageDiagnosticPercent}%`} detail={`${data.summary.averageDiagnosticScore} avg points`} />
           <StatCard label="Foundations missing" value={`${data.summary.foundationsMissingPct}%`} />
           <StatCard label="Algebra ready" value={`${data.summary.algebraReadyPct}%`} />
           <StatCard label="Weakest skill" value={data.summary.weakestSkillOverall} />

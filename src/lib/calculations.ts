@@ -46,8 +46,10 @@ function unique<T>(items: T[]) {
 }
 
 function masteryForQuestions(result: DiagnosticResult, questions: QuestionMapItem[]) {
-  const correct = questions.reduce((sum, q) => sum + (Number(result.answers[q.question_id]) > 0 ? 1 : 0), 0);
-  return pct(correct, questions.length);
+  const attempted = questions.filter((q) => result.attemptedQuestions?.[q.question_id] ?? true);
+  const correct = attempted.reduce((sum, q) => sum + Number(result.answers[q.question_id] ?? 0), 0);
+  const possible = attempted.reduce((sum, q) => sum + (result.possiblePoints?.[q.question_id] ?? q.points_possible ?? 1), 0);
+  return pct(correct, possible);
 }
 
 function bestAndWorst(entries: Record<string, number>) {
@@ -63,27 +65,55 @@ function buildSkillMasteryForStudents(
   questionMap: QuestionMapItem[],
   settings: AppSettings,
 ): SkillMastery[] {
+  const scoredDiagnostics = diagnostics.filter((d) => (d.attemptedQuestionCount ?? Object.keys(d.answers).length) > 0);
   const skills = unique(questionMap.map((q) => q.skill));
   const classPeriods = unique(diagnostics.map((d) => d.class_period));
 
   return skills.map((skill) => {
     const questions = questionMap.filter((q) => q.skill === skill);
-    const correct = diagnostics.reduce(
-      (sum, result) => sum + questions.reduce((inner, q) => inner + (Number(result.answers[q.question_id]) > 0 ? 1 : 0), 0),
+    const correct = scoredDiagnostics.reduce(
+      (sum, result) =>
+        sum +
+        questions.reduce((inner, q) => {
+          const attempted = result.attemptedQuestions?.[q.question_id] ?? true;
+          return inner + (attempted ? Number(result.answers[q.question_id] ?? 0) : 0);
+        }, 0),
       0,
     );
-    const total = diagnostics.length * questions.length;
+    const total = scoredDiagnostics.reduce(
+      (sum, result) =>
+        sum +
+        questions.reduce((inner, q) => {
+          const attempted = result.attemptedQuestions?.[q.question_id] ?? true;
+          return inner + (attempted ? (result.possiblePoints?.[q.question_id] ?? q.points_possible ?? 1) : 0);
+        }, 0),
+      0,
+    );
     const percentCorrect = pct(correct, total);
     const critical = questions.some((q) => q.critical);
     const byClass = Object.fromEntries(
       classPeriods.map((period) => {
         const classDiagnostics = diagnostics.filter((d) => d.class_period === period);
+        const scoredClassDiagnostics = classDiagnostics.filter((d) => (d.attemptedQuestionCount ?? Object.keys(d.answers).length) > 0);
         const classCorrect = classDiagnostics.reduce(
           (sum, result) =>
-            sum + questions.reduce((inner, q) => inner + (Number(result.answers[q.question_id]) > 0 ? 1 : 0), 0),
+            sum +
+            questions.reduce((inner, q) => {
+              const attempted = result.attemptedQuestions?.[q.question_id] ?? true;
+              return inner + (attempted ? Number(result.answers[q.question_id] ?? 0) : 0);
+            }, 0),
           0,
         );
-        return [period, pct(classCorrect, classDiagnostics.length * questions.length)];
+        const classPossible = scoredClassDiagnostics.reduce(
+          (sum, result) =>
+            sum +
+            questions.reduce((inner, q) => {
+              const attempted = result.attemptedQuestions?.[q.question_id] ?? true;
+              return inner + (attempted ? (result.possiblePoints?.[q.question_id] ?? q.points_possible ?? 1) : 0);
+            }, 0),
+          0,
+        );
+        return [period, pct(classCorrect, classPossible)];
       }),
     );
 
@@ -115,14 +145,23 @@ function buildStudentProfile(
   appData: RawAppData,
   settings: AppSettings,
 ): StudentProfile {
-  const totalPossible = questionMap.length || 20;
-  const totalScore = questionMap.reduce((sum, q) => sum + (Number(result.answers[q.question_id]) > 0 ? 1 : 0), 0);
+  const attemptedQuestionCount = result.attemptedQuestionCount ?? questionMap.filter((q) => result.attemptedQuestions?.[q.question_id] ?? true).length;
+  const incomplete = Boolean(result.incomplete || attemptedQuestionCount === 0);
+  const totalPossible = result.totalPointsPossible ?? questionMap.reduce((sum, q) => {
+    const attempted = result.attemptedQuestions?.[q.question_id] ?? true;
+    return sum + (attempted ? (result.possiblePoints?.[q.question_id] ?? q.points_possible ?? 1) : 0);
+  }, 0);
+  const totalScore = result.totalPointsEarned ?? questionMap.reduce((sum, q) => {
+    const attempted = result.attemptedQuestions?.[q.question_id] ?? true;
+    return sum + (attempted ? Number(result.answers[q.question_id] ?? 0) : 0);
+  }, 0);
   const percentage = pct(totalScore, totalPossible);
   const letterGrade = getLetterGrade(percentage, settings);
-  const readinessBand = getReadinessBand(totalScore, settings);
+  const readinessEquivalentScore = round((percentage / 100) * 20);
+  const readinessBand = incomplete ? "Foundations Missing" : getReadinessBand(readinessEquivalentScore, settings);
   const criticalQuestions = questionMap.filter((q) => q.critical);
   const missedCriticalQuestions = criticalQuestions
-    .filter((q) => Number(result.answers[q.question_id]) <= 0)
+    .filter((q) => (result.attemptedQuestions?.[q.question_id] ?? true) && Number(result.answers[q.question_id] ?? 0) < (result.possiblePoints?.[q.question_id] ?? q.points_possible ?? 1))
     .map((q) => `${q.question_id}: ${q.skill}`);
 
   const zones = unique(questionMap.map((q) => q.zone));
@@ -137,21 +176,23 @@ function buildStudentProfile(
   const functions = questionMap.filter((q) => q.zone === "Functions");
 
   const interventionFlags: string[] = [];
-  if (percentage < 50 || missedCriticalQuestions.length >= settings.criticalQuestionThreshold) interventionFlags.push("Immediate Intervention");
-  if ((Number(result.answers.Q8) <= 0 && Number(result.answers.Q9) <= 0) || masteryForQuestions(result, equations) < 60) {
+  if (!incomplete && (percentage < 50 || missedCriticalQuestions.length >= settings.criticalQuestionThreshold)) interventionFlags.push("Immediate Intervention");
+  if (!incomplete && equations.length && masteryForQuestions(result, equations) < 60) {
     interventionFlags.push("Equation Support");
   }
-  if (masteryForQuestions(result, numberSense) < 60) interventionFlags.push("Number Sense Support");
-  if (masteryForQuestions(result, graphing) < 60) interventionFlags.push("Graphing/Slope Support");
-  if (masteryForQuestions(result, functions) < 60) interventionFlags.push("Function Thinking Support");
+  if (!incomplete && numberSense.length && masteryForQuestions(result, numberSense) < 60) interventionFlags.push("Number Sense Support");
+  if (!incomplete && graphing.length && masteryForQuestions(result, graphing) < 60) interventionFlags.push("Graphing/Slope Support");
+  if (!incomplete && functions.length && masteryForQuestions(result, functions) < 60) interventionFlags.push("Function Thinking Support");
 
-  const enrichment = percentage >= 85 && missedCriticalQuestions.length <= 1;
+  const enrichment = !incomplete && percentage >= 85 && missedCriticalQuestions.length <= 1;
   const recommendedNextMove = recommendedMove(interventionFlags, enrichment, zoneRank.weakest);
   const reflection = appData.reflections.find((item) => item.student_id === result.student_id);
   const parentSummary = `${result.first_name} is beginning Algebra 1 with strength in ${skillRank.strongest}. The main area for growth is ${skillRank.weakest}. The recommended next step is ${recommendedNextMove} We will continue tracking progress through short checks and targeted practice.`;
 
   return {
     ...result,
+    attemptedQuestionCount,
+    incomplete,
     totalScore,
     totalPossible,
     percentage,
@@ -181,9 +222,19 @@ function buildGroups(students: StudentProfile[]): InterventionGroup[] {
     "Graphing/Slope Support": "Graph interpretation routine plus slope-from-points and slope-from-context practice.",
     "Function Thinking Support": "Function table, notation, and pattern-rule task set.",
     Enrichment: "Multi-representation linear modeling task with non-routine extension questions.",
+    "No Data / Not Started": "Check assignment access, login status, and whether the student needs time to begin the diagnostic.",
   };
 
   return students.flatMap((student) => {
+    if (student.incomplete) {
+      return [{
+        groupName: "No Data / Not Started",
+        student,
+        classPeriod: student.class_period || "Unassigned",
+        reason: student.class_period === "Unassigned" ? "No section or no scored attempts in the export." : "No scored attempts in the export.",
+        suggestedActivity: activities["No Data / Not Started"],
+      }];
+    }
     const interventionRows = student.interventionFlags.map((flag) => ({
       groupName: flag,
       student,
@@ -210,9 +261,25 @@ function classRecommendations(students: StudentProfile[], questionMap: QuestionM
   const resultMap = Object.fromEntries(students.map((s) => [s.student_id, s]));
   const missPctForZone = (zone: string) => {
     const questions = questionMap.filter((q) => q.zone === zone);
-    const possible = questions.length * students.length;
+    const scoredStudents = students.filter((student) => !student.incomplete);
+    const possible = questions.reduce(
+      (sum, question) =>
+        sum +
+        scoredStudents.reduce((inner, student) => {
+          const attempted = resultMap[student.student_id].attemptedQuestions?.[question.question_id] ?? true;
+          return inner + (attempted ? (resultMap[student.student_id].possiblePoints?.[question.question_id] ?? question.points_possible ?? 1) : 0);
+        }, 0),
+      0,
+    );
     const missed = students.reduce(
-      (sum, student) => sum + questions.reduce((inner, q) => inner + (Number(resultMap[student.student_id].answers[q.question_id]) > 0 ? 0 : 1), 0),
+      (sum, student) =>
+        sum +
+        questions.reduce((inner, q) => {
+          if (student.incomplete) return inner;
+          const attempted = resultMap[student.student_id].attemptedQuestions?.[q.question_id] ?? true;
+          const possibleForQuestion = resultMap[student.student_id].possiblePoints?.[q.question_id] ?? q.points_possible ?? 1;
+          return inner + (attempted ? possibleForQuestion - Number(resultMap[student.student_id].answers[q.question_id] ?? 0) : 0);
+        }, 0),
       0,
     );
     return pct(missed, possible);
@@ -231,19 +298,21 @@ function classRecommendations(students: StudentProfile[], questionMap: QuestionM
 function buildClassSummaries(students: StudentProfile[], questionMap: QuestionMapItem[], settings: AppSettings): ClassSummary[] {
   return unique(students.map((s) => s.class_period)).map((period) => {
     const classStudents = students.filter((s) => s.class_period === period);
+    const scoredClassStudents = classStudents.filter((s) => !s.incomplete);
     const skillAverages = Object.fromEntries(
       unique(questionMap.map((q) => q.skill)).map((skill) => [
         skill,
-        round(classStudents.reduce((sum, student) => sum + (student.skillMastery.find((row) => row.skill === skill)?.percentCorrect ?? 0), 0) / Math.max(classStudents.length, 1)),
+        round(scoredClassStudents.reduce((sum, student) => sum + (student.skillMastery.find((row) => row.skill === skill)?.percentCorrect ?? 0), 0) / Math.max(scoredClassStudents.length, 1)),
       ]),
     );
     const skillRank = bestAndWorst(skillAverages);
     return {
       period,
-      label: settings.classLabels[period] || `Period ${period}`,
+      label: settings.classLabels[period] || (period === "Unassigned" ? "Unassigned" : `Period ${period}`),
       studentCount: classStudents.length,
-      averageScore: round(classStudents.reduce((sum, s) => sum + s.totalScore, 0) / Math.max(classStudents.length, 1)),
-      medianScore: median(classStudents.map((s) => s.totalScore)),
+      averageScore: round(scoredClassStudents.reduce((sum, s) => sum + s.totalScore, 0) / Math.max(scoredClassStudents.length, 1)),
+      averagePercent: round(scoredClassStudents.reduce((sum, s) => sum + s.percentage, 0) / Math.max(scoredClassStudents.length, 1)),
+      medianScore: median(scoredClassStudents.map((s) => s.totalScore)),
       foundationsMissingPct: pct(classStudents.filter((s) => s.readinessBand === "Foundations Missing").length, classStudents.length),
       enteringPct: pct(classStudents.filter((s) => s.readinessBand === "Entering Algebra 1").length, classStudents.length),
       algebraReadyPct: pct(classStudents.filter((s) => s.readinessBand === "Algebra Ready").length, classStudents.length),
@@ -264,10 +333,12 @@ export function deriveData(appData: RawAppData, settings: AppSettings = defaultS
   const skills = buildSkillMasteryForStudents(diagnostics, questionMap, settings).sort((a, b) => a.percentCorrect - b.percentCorrect);
   const classes = buildClassSummaries(students, questionMap, settings);
   const groups = buildGroups(students);
+  const scoredStudents = students.filter((student) => !student.incomplete);
   const summary = {
     totalStudents: students.length,
     classCount: classes.length,
-    averageDiagnosticScore: round(students.reduce((sum, s) => sum + s.totalScore, 0) / Math.max(students.length, 1)),
+    averageDiagnosticScore: round(scoredStudents.reduce((sum, s) => sum + s.totalScore, 0) / Math.max(scoredStudents.length, 1)),
+    averageDiagnosticPercent: round(scoredStudents.reduce((sum, s) => sum + s.percentage, 0) / Math.max(scoredStudents.length, 1)),
     foundationsMissingPct: pct(students.filter((s) => s.readinessBand === "Foundations Missing").length, students.length),
     algebraReadyPct: pct(students.filter((s) => s.readinessBand === "Algebra Ready" || s.readinessBand === "Meets/Masters Candidate").length, students.length),
     weakestSkillOverall: skills[0]?.skill ?? "Not enough data",
