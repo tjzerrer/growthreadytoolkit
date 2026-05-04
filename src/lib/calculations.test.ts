@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveData, getPriority, getReadinessBand } from "./calculations";
+import { deriveData, getGrowthIndicator, getPriority, getReadinessBand, getStaarTrajectory } from "./calculations";
 import { createUnmappedQuestionMap, mergeQuestionMapWithDetected, parseCsvMatrixString, parseMyOpenMathDetailedRows } from "./csv";
 import { defaultQuestionMap } from "./demoData";
 import type { DiagnosticResult, RawAppData } from "./types";
@@ -82,5 +82,16 @@ describe("GrowthReady calculations", () => {
     const data = deriveData(raw);
     expect(data.skills[0].skill).toBe("Unmapped Questions");
     expect(data.students[0].percentage).toBe(100);
+  });
+
+  it("calculates STAAR trajectory and growth indicators deterministically", () => {
+    expect(getStaarTrajectory(92)).toBe("Masters Trajectory");
+    expect(getStaarTrajectory(74)).toBe("Meets Trajectory");
+    expect(getStaarTrajectory(52)).toBe("Approaches Trajectory");
+    expect(getStaarTrajectory(42)).toBe("Did Not Meet Risk");
+    expect(getGrowthIndicator("Did Not Meet", "Approaches Trajectory")).toBe("Accelerating");
+    expect(getGrowthIndicator("Meets", "Meets Trajectory")).toBe("On Track");
+    expect(getGrowthIndicator("Masters", "Meets Trajectory")).toBe("At Risk");
+    expect(getGrowthIndicator(undefined, "Meets Trajectory")).toBe("Unknown");
   });
 });

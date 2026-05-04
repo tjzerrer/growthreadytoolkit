@@ -1,7 +1,7 @@
 "use client";
 
 import Papa from "papaparse";
-import type { DiagnosticResult, MyOpenMathParseResult, QuestionMapItem, Reflection, Student } from "./types";
+import type { DiagnosticResult, MyOpenMathParseResult, PriorStaarRecord, QuestionMapItem, Reflection, Student } from "./types";
 
 export type ParsedUpload = {
   rows: Record<string, string>[];
@@ -12,6 +12,7 @@ const required = {
   roster: ["student_id", "first_name", "last_name", "class_period"],
   diagnostic: ["student_id", "first_name", "last_name", "class_period"],
   questionMap: ["skill", "teks", "zone", "critical"],
+  priorStaar: ["student_id", "prior_staar_year", "prior_staar_test", "prior_scale_score", "prior_performance_level", "prior_growth_level"],
 };
 
 export function parseCsvFile(file: File): Promise<ParsedUpload> {
@@ -253,6 +254,22 @@ export function normalizeReflections(rows: Record<string, string>[]): Reflection
     concern: row.concern?.trim(),
     preferred_support: row.preferred_support?.trim(),
   }));
+}
+
+export function normalizePriorStaar(rows: Record<string, string>[]): { data: PriorStaarRecord[]; errors: string[] } {
+  const errors = validateColumns(rows, required.priorStaar, "Prior STAAR CSV");
+  return {
+    errors,
+    data: rows.map((row) => ({
+      student_id: row.student_id?.trim(),
+      prior_staar_year: row.prior_staar_year?.trim(),
+      prior_staar_test: row.prior_staar_test?.trim(),
+      prior_scale_score: row.prior_scale_score?.trim(),
+      prior_performance_level: row.prior_performance_level?.trim(),
+      prior_growth_level: row.prior_growth_level?.trim(),
+      notes: row.notes?.trim(),
+    })).filter((row) => row.student_id),
+  };
 }
 
 export function downloadCsv(filename: string, rows: Record<string, string | number | boolean | undefined>[]) {

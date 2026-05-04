@@ -13,6 +13,8 @@ export function exportGroups(data: DerivedData) {
       class_period: group.classPeriod,
       reason: group.reason,
       suggested_activity: group.suggestedActivity,
+      trajectory: group.student.staarTrajectory,
+      growth_indicator: group.student.growthIndicator,
     })),
   );
 }
@@ -34,6 +36,11 @@ export function exportClassSummary(data: DerivedData) {
       strongest_skill: item.strongestSkill,
       intervention_count: item.interventionCount,
       enrichment_count: item.enrichmentCount,
+      masters_trajectory_pct: item.trajectoryPercentages["Masters Trajectory"],
+      meets_trajectory_pct: item.trajectoryPercentages["Meets Trajectory"],
+      approaches_trajectory_pct: item.trajectoryPercentages["Approaches Trajectory"],
+      did_not_meet_risk_pct: item.trajectoryPercentages["Did Not Meet Risk"],
+      dominant_trajectory: item.dominantTrajectory,
     })),
   );
 }
@@ -49,6 +56,10 @@ export function exportStudents(data: DerivedData) {
       percentage: student.percentage,
       grade: student.letterGrade,
       readiness_band: student.readinessBand,
+      algebra_readiness_index: student.algebraReadinessIndex,
+      staar_trajectory: student.staarTrajectory,
+      prior_staar_performance_level: student.priorStaar?.prior_performance_level,
+      growth_indicator: student.growthIndicator,
       strongest_skill: student.strongestSkill,
       weakest_skill: student.weakestSkill,
       intervention_flags: student.interventionFlags.join("; "),

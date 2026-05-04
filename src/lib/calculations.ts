@@ -1,9 +1,10 @@
-import { defaultSettings, gradeOrder } from "./settings";
+import { defaultSettings, gradeOrder, trajectoryOrder } from "./settings";
 import type {
   AppSettings,
   ClassSummary,
   DerivedData,
   DiagnosticResult,
+  GrowthIndicator,
   InterventionGroup,
   LetterGrade,
   PriorityLevel,
@@ -11,6 +12,7 @@ import type {
   RawAppData,
   ReadinessBand,
   SkillMastery,
+  StaarTrajectory,
   StudentProfile,
 } from "./types";
 
@@ -32,6 +34,43 @@ export function getPriority(percentCorrect: number, critical: boolean): Priority
   if (critical && percentCorrect < 70) return "High";
   if (percentCorrect < 80) return "Medium";
   return "Low";
+}
+
+export function getStaarTrajectory(index: number, settings: AppSettings = defaultSettings): StaarTrajectory {
+  if (index >= settings.trajectory.mastersCutoff) return "Masters Trajectory";
+  if (index >= settings.trajectory.meetsCutoff) return "Meets Trajectory";
+  if (index >= settings.trajectory.approachesCutoff) return "Approaches Trajectory";
+  return "Did Not Meet Risk";
+}
+
+function normalizePerformanceLevel(level: string | undefined): StaarTrajectory | undefined {
+  const normalized = String(level ?? "").toLowerCase();
+  if (normalized.includes("did not") || normalized.includes("not meet") || normalized.includes("dnm")) return "Did Not Meet Risk";
+  if (normalized.includes("master")) return "Masters Trajectory";
+  if (normalized.includes("meet")) return "Meets Trajectory";
+  if (normalized.includes("approach")) return "Approaches Trajectory";
+  return undefined;
+}
+
+function trajectoryRank(level: StaarTrajectory) {
+  return {
+    "Did Not Meet Risk": 0,
+    "Approaches Trajectory": 1,
+    "Meets Trajectory": 2,
+    "Masters Trajectory": 3,
+  }[level];
+}
+
+export function getGrowthIndicator(priorLevel: string | undefined, currentTrajectory: StaarTrajectory): GrowthIndicator {
+  const prior = normalizePerformanceLevel(priorLevel);
+  if (!prior) return "Unknown";
+  if (prior === "Did Not Meet Risk" && trajectoryRank(currentTrajectory) >= trajectoryRank("Approaches Trajectory")) return "Accelerating";
+  if (prior === "Approaches Trajectory" && trajectoryRank(currentTrajectory) >= trajectoryRank("Meets Trajectory")) return "Accelerating";
+  if (prior === "Meets Trajectory" && trajectoryRank(currentTrajectory) >= trajectoryRank("Meets Trajectory")) return "On Track";
+  if (prior === "Masters Trajectory" && currentTrajectory === "Masters Trajectory") return "On Track";
+  if (prior === currentTrajectory) return "Flat";
+  if (trajectoryRank(currentTrajectory) < trajectoryRank(prior)) return "At Risk";
+  return "Flat";
 }
 
 function median(values: number[]) {
@@ -139,6 +178,13 @@ function recommendedMove(flags: string[], enrichment: boolean, weakestZone: stri
   return `Use targeted practice on ${weakestZone} and reassess with a short exit ticket.`;
 }
 
+function trajectoryRecommendedMove(trajectory: StaarTrajectory) {
+  if (trajectory === "Did Not Meet Risk") return "Prioritize prerequisite skill intervention and short reassessment cycles.";
+  if (trajectory === "Approaches Trajectory") return "Focus on high-impact readiness skills and error analysis to move toward Meets.";
+  if (trajectory === "Meets Trajectory") return "Maintain grade-level practice and add multi-step STAAR-style interpretation tasks.";
+  return "Provide enrichment with non-routine modeling, multiple representations, and justification.";
+}
+
 function buildStudentProfile(
   result: DiagnosticResult,
   questionMap: QuestionMapItem[],
@@ -156,6 +202,8 @@ function buildStudentProfile(
     return sum + (attempted ? Number(result.answers[q.question_id] ?? 0) : 0);
   }, 0);
   const percentage = pct(totalScore, totalPossible);
+  const algebraReadinessIndex = incomplete ? 0 : percentage;
+  const staarTrajectory = getStaarTrajectory(algebraReadinessIndex, settings);
   const letterGrade = getLetterGrade(percentage, settings);
   const readinessEquivalentScore = round((percentage / 100) * 20);
   const readinessBand = incomplete ? "Foundations Missing" : getReadinessBand(readinessEquivalentScore, settings);
@@ -185,8 +233,17 @@ function buildStudentProfile(
   if (!incomplete && functions.length && masteryForQuestions(result, functions) < 60) interventionFlags.push("Function Thinking Support");
 
   const enrichment = !incomplete && percentage >= 85 && missedCriticalQuestions.length <= 1;
-  const recommendedNextMove = recommendedMove(interventionFlags, enrichment, zoneRank.weakest);
+  const recommendedNextMove = incomplete ? "Confirm the student has started the assessment and collect current evidence." : trajectoryRecommendedMove(staarTrajectory);
+  const skillRecommendedMove = recommendedMove(interventionFlags, enrichment, zoneRank.weakest);
   const reflection = appData.reflections.find((item) => item.student_id === result.student_id);
+  const priorStaar = appData.priorStaar?.find((item) => item.student_id === result.student_id);
+  const growthIndicator = getGrowthIndicator(priorStaar?.prior_performance_level, staarTrajectory);
+  const evidenceTable = [
+    { evidence: "Current diagnostic percentage", value: `${percentage}%`, note: "Version 1 evidence source" },
+    { evidence: "Algebra Readiness Index", value: `${algebraReadinessIndex}%`, note: "Equals diagnostic percentage until weighted evidence is added" },
+    { evidence: "Skill-based next move", value: skillRecommendedMove, note: "Based on weakest zones and intervention flags" },
+    { evidence: "Prior STAAR", value: priorStaar?.prior_performance_level || "Not uploaded", note: priorStaar?.prior_staar_year || "Growth indicator remains Unknown without prior data" },
+  ];
   const parentSummary = `${result.first_name} is beginning Algebra 1 with strength in ${skillRank.strongest}. The main area for growth is ${skillRank.weakest}. The recommended next step is ${recommendedNextMove} We will continue tracking progress through short checks and targeted practice.`;
 
   return {
@@ -196,6 +253,8 @@ function buildStudentProfile(
     totalScore,
     totalPossible,
     percentage,
+    algebraReadinessIndex,
+    staarTrajectory,
     letterGrade,
     readinessBand,
     strongestSkill: skillRank.strongest,
@@ -209,6 +268,9 @@ function buildStudentProfile(
     interventionFlags,
     enrichment,
     recommendedNextMove,
+    priorStaar,
+    growthIndicator,
+    evidenceTable,
     reflection,
     parentSummary,
   };
@@ -223,11 +285,33 @@ function buildGroups(students: StudentProfile[]): InterventionGroup[] {
     "Function Thinking Support": "Function table, notation, and pattern-rule task set.",
     Enrichment: "Multi-representation linear modeling task with non-routine extension questions.",
     "No Data / Not Started": "Check assignment access, login status, and whether the student needs time to begin the diagnostic.",
+    "Masters Trajectory": trajectoryRecommendedMove("Masters Trajectory"),
+    "Meets Trajectory": trajectoryRecommendedMove("Meets Trajectory"),
+    "Approaches Trajectory": trajectoryRecommendedMove("Approaches Trajectory"),
+    "Did Not Meet Risk": trajectoryRecommendedMove("Did Not Meet Risk"),
+    Accelerating: "Celebrate the upward trajectory and keep moving the student into the next performance band.",
+    "At Risk": "Compare prior strengths to current gaps and schedule a targeted recovery conference.",
   };
 
   return students.flatMap((student) => {
+    const trajectoryRow = {
+      groupName: student.staarTrajectory,
+      student,
+      classPeriod: student.class_period,
+      reason: `Algebra Readiness Index: ${student.algebraReadinessIndex}%`,
+      suggestedActivity: activities[student.staarTrajectory],
+    };
+    const growthRow = ["Accelerating", "At Risk"].includes(student.growthIndicator)
+      ? [{
+          groupName: student.growthIndicator,
+          student,
+          classPeriod: student.class_period,
+          reason: `Prior STAAR: ${student.priorStaar?.prior_performance_level || "Unknown"}; current: ${student.staarTrajectory}`,
+          suggestedActivity: activities[student.growthIndicator],
+        }]
+      : [];
     if (student.incomplete) {
-      return [{
+      return [trajectoryRow, ...growthRow, {
         groupName: "No Data / Not Started",
         student,
         classPeriod: student.class_period || "Unassigned",
@@ -242,9 +326,10 @@ function buildGroups(students: StudentProfile[]): InterventionGroup[] {
       reason: flag === "Immediate Intervention" ? `${student.totalScore}/${student.totalPossible}, ${student.criticalMissedCount} critical missed` : `Weakest zone: ${student.weakestZone}`,
       suggestedActivity: activities[flag],
     }));
+    const baseRows = [trajectoryRow, ...growthRow, ...interventionRows];
     return student.enrichment
       ? [
-          ...interventionRows,
+          ...baseRows,
           {
             groupName: "Enrichment",
             student,
@@ -253,7 +338,7 @@ function buildGroups(students: StudentProfile[]): InterventionGroup[] {
             suggestedActivity: activities.Enrichment,
           },
         ]
-      : interventionRows;
+      : baseRows;
   });
 }
 
@@ -306,6 +391,12 @@ function buildClassSummaries(students: StudentProfile[], questionMap: QuestionMa
       ]),
     );
     const skillRank = bestAndWorst(skillAverages);
+    const trajectoryCounts = Object.fromEntries(
+      trajectoryOrder.map((trajectory) => [trajectory, classStudents.filter((student) => student.staarTrajectory === trajectory).length]),
+    ) as Record<StaarTrajectory, number>;
+    const trajectoryPercentages = Object.fromEntries(
+      trajectoryOrder.map((trajectory) => [trajectory, pct(trajectoryCounts[trajectory], classStudents.length)]),
+    ) as Record<StaarTrajectory, number>;
     return {
       period,
       label: settings.classLabels[period] || (period === "Unassigned" ? "Unassigned" : `Period ${period}`),
@@ -321,6 +412,9 @@ function buildClassSummaries(students: StudentProfile[], questionMap: QuestionMa
       strongestSkill: skillRank.strongest,
       interventionCount: classStudents.filter((s) => s.interventionFlags.length).length,
       enrichmentCount: classStudents.filter((s) => s.enrichment).length,
+      trajectoryCounts,
+      trajectoryPercentages,
+      dominantTrajectory: trajectoryOrder.reduce((best, trajectory) => (trajectoryCounts[trajectory] > trajectoryCounts[best] ? trajectory : best), "Did Not Meet Risk" as StaarTrajectory),
       recommendations: classRecommendations(classStudents, questionMap),
     };
   });
@@ -334,6 +428,9 @@ export function deriveData(appData: RawAppData, settings: AppSettings = defaultS
   const classes = buildClassSummaries(students, questionMap, settings);
   const groups = buildGroups(students);
   const scoredStudents = students.filter((student) => !student.incomplete);
+  const trajectoryCounts = Object.fromEntries(
+    trajectoryOrder.map((trajectory) => [trajectory, students.filter((student) => student.staarTrajectory === trajectory).length]),
+  ) as Record<StaarTrajectory, number>;
   const summary = {
     totalStudents: students.length,
     classCount: classes.length,
@@ -344,6 +441,15 @@ export function deriveData(appData: RawAppData, settings: AppSettings = defaultS
     weakestSkillOverall: skills[0]?.skill ?? "Not enough data",
     interventionCount: students.filter((s) => s.interventionFlags.length).length,
     enrichmentCount: students.filter((s) => s.enrichment).length,
+    trajectoryCounts,
+    highestDidNotMeetRiskClasses: [...classes]
+      .sort((a, b) => b.trajectoryPercentages["Did Not Meet Risk"] - a.trajectoryPercentages["Did Not Meet Risk"])
+      .slice(0, 3)
+      .map((item) => ({ period: item.period, label: item.label, percentage: item.trajectoryPercentages["Did Not Meet Risk"] })),
+    highestMastersClasses: [...classes]
+      .sort((a, b) => b.trajectoryPercentages["Masters Trajectory"] - a.trajectoryPercentages["Masters Trajectory"])
+      .slice(0, 3)
+      .map((item) => ({ period: item.period, label: item.label, percentage: item.trajectoryPercentages["Masters Trajectory"] })),
   };
 
   return { students, classes, skills, groups, summary };

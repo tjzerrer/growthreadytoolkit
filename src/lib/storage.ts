@@ -22,7 +22,20 @@ export function clearStoredData() {
 
 export function loadSettings(): AppSettings {
   const value = localStorage.getItem(SETTINGS_KEY);
-  return value ? { ...defaultSettings, ...(JSON.parse(value) as AppSettings) } : defaultSettings;
+  if (!value) return defaultSettings;
+  const parsed = JSON.parse(value) as Partial<AppSettings>;
+  return {
+    ...defaultSettings,
+    ...parsed,
+    gradeCutoffs: { ...defaultSettings.gradeCutoffs, ...parsed.gradeCutoffs },
+    readinessBands: { ...defaultSettings.readinessBands, ...parsed.readinessBands },
+    trajectory: {
+      ...defaultSettings.trajectory,
+      ...parsed.trajectory,
+      badges: { ...defaultSettings.trajectory.badges, ...parsed.trajectory?.badges },
+    },
+    classLabels: { ...defaultSettings.classLabels, ...parsed.classLabels },
+  };
 }
 
 export function saveSettings(settings: AppSettings) {

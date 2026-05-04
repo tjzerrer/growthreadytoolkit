@@ -6,6 +6,12 @@ export type ReadinessBand =
 
 export type LetterGrade = "A" | "B" | "C" | "D" | "F";
 export type PriorityLevel = "High" | "Medium" | "Low";
+export type StaarTrajectory =
+  | "Masters Trajectory"
+  | "Meets Trajectory"
+  | "Approaches Trajectory"
+  | "Did Not Meet Risk";
+export type GrowthIndicator = "Accelerating" | "On Track" | "Flat" | "At Risk" | "Unknown";
 
 export type Student = {
   student_id: string;
@@ -51,11 +57,22 @@ export type Reflection = {
   preferred_support?: string;
 };
 
+export type PriorStaarRecord = {
+  student_id: string;
+  prior_staar_year?: string;
+  prior_staar_test?: string;
+  prior_scale_score?: string;
+  prior_performance_level?: string;
+  prior_growth_level?: string;
+  notes?: string;
+};
+
 export type RawAppData = {
   roster: Student[];
   diagnostics: DiagnosticResult[];
   questionMap: QuestionMapItem[];
   reflections: Reflection[];
+  priorStaar?: PriorStaarRecord[];
 };
 
 export type AppSettings = {
@@ -68,6 +85,13 @@ export type AppSettings = {
   criticalQuestionThreshold: number;
   skillMasteryThreshold: number;
   classLabels: Record<string, string>;
+  trajectory: {
+    mastersCutoff: number;
+    meetsCutoff: number;
+    approachesCutoff: number;
+    didNotMeetCutoff: number;
+    badges: Record<StaarTrajectory, { name: string; color: "blue" | "green" | "yellow" | "red"; icon: string }>;
+  };
 };
 
 export type SkillMastery = {
@@ -92,6 +116,8 @@ export type StudentProfile = Student & {
   totalScore: number;
   totalPossible: number;
   percentage: number;
+  algebraReadinessIndex: number;
+  staarTrajectory: StaarTrajectory;
   letterGrade: LetterGrade;
   readinessBand: ReadinessBand;
   strongestSkill: string;
@@ -105,6 +131,9 @@ export type StudentProfile = Student & {
   interventionFlags: string[];
   enrichment: boolean;
   recommendedNextMove: string;
+  priorStaar?: PriorStaarRecord;
+  growthIndicator: GrowthIndicator;
+  evidenceTable: { evidence: string; value: string; note: string }[];
   reflection?: Reflection;
   parentSummary: string;
 };
@@ -159,6 +188,9 @@ export type ClassSummary = {
   strongestSkill: string;
   interventionCount: number;
   enrichmentCount: number;
+  trajectoryCounts: Record<StaarTrajectory, number>;
+  trajectoryPercentages: Record<StaarTrajectory, number>;
+  dominantTrajectory: StaarTrajectory;
   recommendations: string[];
 };
 
@@ -172,6 +204,9 @@ export type OverallSummary = {
   weakestSkillOverall: string;
   interventionCount: number;
   enrichmentCount: number;
+  trajectoryCounts: Record<StaarTrajectory, number>;
+  highestDidNotMeetRiskClasses: { period: string; label: string; percentage: number }[];
+  highestMastersClasses: { period: string; label: string; percentage: number }[];
 };
 
 export type DerivedData = {

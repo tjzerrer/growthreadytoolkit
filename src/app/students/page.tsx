@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge, bandTone, Button, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, bandTone, Button, EmptyState, GrowthBadge, PageHeader, TrajectoryBadge, TrajectoryDisclaimer } from "@/components/ui";
 import { exportStudents } from "@/lib/exports";
 import { useGrowthData } from "@/lib/useGrowthData";
 
 export default function StudentsPage() {
-  const { data, ready } = useGrowthData();
+  const { data, ready, settings } = useGrowthData();
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("all");
   if (ready && !data) return <EmptyState />;
@@ -22,6 +22,7 @@ export default function StudentsPage() {
       <PageHeader title="Students" eyebrow="Student index">
         Search students and open individual profiles with deterministic next steps and parent-friendly summaries.
       </PageHeader>
+      <TrajectoryDisclaimer />
       {data ? (
         <>
           <div className="mb-4 flex flex-wrap gap-3">
@@ -34,12 +35,12 @@ export default function StudentsPage() {
           </div>
           <div className="card table-wrap rounded-3xl">
             <table>
-              <thead><tr><th>Name</th><th>Class</th><th>Score</th><th>Band</th><th>Strongest</th><th>Weakest</th><th>Flags</th><th>Enrichment</th></tr></thead>
+              <thead><tr><th>Name</th><th>Class</th><th>Score</th><th>STAAR trajectory</th><th>Growth</th><th>Band</th><th>Strongest</th><th>Weakest</th><th>Flags</th><th>Enrichment</th></tr></thead>
               <tbody>
                 {students.map((student) => (
                   <tr key={student.student_id}>
                     <td><Link className="font-black text-[#174a36] underline" href={`/students/${student.student_id}`}>{student.first_name} {student.last_name}</Link></td>
-                    <td>{student.class_period}</td><td>{student.incomplete ? "No data" : `${student.totalScore}/${student.totalPossible}`}</td><td><Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge></td><td>{student.strongestSkill}</td><td>{student.weakestSkill}</td><td>{student.incomplete ? "No Data / Not Started" : student.interventionFlags.join(", ") || "None"}</td><td>{student.enrichment ? "Yes" : "No"}</td>
+                    <td>{student.class_period}</td><td>{student.incomplete ? "No data" : `${student.totalScore}/${student.totalPossible}`}</td><td><TrajectoryBadge trajectory={student.staarTrajectory} settings={settings} /></td><td><GrowthBadge indicator={student.growthIndicator} /></td><td><Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge></td><td>{student.strongestSkill}</td><td>{student.weakestSkill}</td><td>{student.incomplete ? "No Data / Not Started" : student.interventionFlags.join(", ") || "None"}</td><td>{student.enrichment ? "Yes" : "No"}</td>
                   </tr>
                 ))}
               </tbody>

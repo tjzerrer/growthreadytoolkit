@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Badge, bandTone, Card, EmptyState, masteryColor, PageHeader, StatCard } from "@/components/ui";
+import { Badge, bandTone, Card, EmptyState, GrowthBadge, masteryColor, PageHeader, StatCard, TrajectoryBadge, TrajectoryDisclaimer } from "@/components/ui";
 import { loadNotes, saveNote } from "@/lib/storage";
 import { useGrowthData } from "@/lib/useGrowthData";
 
 export default function StudentProfilePage() {
   const params = useParams<{ student_id: string }>();
   const studentId = params?.student_id ?? "";
-  const { data, ready } = useGrowthData();
+  const { data, ready, settings } = useGrowthData();
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -24,13 +24,18 @@ export default function StudentProfilePage() {
       <PageHeader title={student ? `${student.first_name} ${student.last_name}` : "Student Profile"} eyebrow="Individual student">
         Diagnostic profile, flags, teacher notes, reflection data, and a parent-friendly deterministic summary.
       </PageHeader>
+      <TrajectoryDisclaimer />
       {student ? (
         <>
           <section className="mb-6 grid gap-4 md:grid-cols-4">
             <StatCard label="Class period" value={student.class_period} />
             <StatCard label="Diagnostic" value={`${student.totalScore}/${student.totalPossible}`} detail={`${student.percentage}%`} />
+            <StatCard label="Algebra readiness index" value={`${student.algebraReadinessIndex}%`} />
             <StatCard label="A-F equivalent" value={student.letterGrade} />
             <StatCard label="Readiness" value={<Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge>} />
+            <StatCard label="STAAR trajectory" value={<TrajectoryBadge trajectory={student.staarTrajectory} settings={settings} />} />
+            <StatCard label="Prior STAAR" value={student.priorStaar?.prior_performance_level || "Not uploaded"} detail={student.priorStaar?.prior_staar_year} />
+            <StatCard label="Growth indicator" value={<GrowthBadge indicator={student.growthIndicator} />} />
           </section>
 
           <section className="mb-6 grid gap-4 lg:grid-cols-2">
@@ -57,6 +62,16 @@ export default function StudentProfilePage() {
               <thead><tr><th>Skill</th><th>Zone</th><th>TEKS</th><th>% Correct</th><th>Priority</th></tr></thead>
               <tbody>
                 {student.skillMastery.map((skill) => <tr key={skill.skill}><td>{skill.skill}</td><td>{skill.zone}</td><td>{skill.teks}</td><td><span className={`rounded-full px-3 py-1 font-black ${masteryColor(skill.percentCorrect)}`}>{skill.percentCorrect}%</span></td><td>{skill.priority}</td></tr>)}
+              </tbody>
+            </table>
+          </Card>
+
+          <Card className="mb-6 table-wrap">
+            <h2 className="mb-4 text-xl font-black text-[#174a36]">STAAR trajectory evidence</h2>
+            <table>
+              <thead><tr><th>Evidence</th><th>Value</th><th>Note</th></tr></thead>
+              <tbody>
+                {student.evidenceTable.map((row) => <tr key={row.evidence}><td>{row.evidence}</td><td>{row.value}</td><td>{row.note}</td></tr>)}
               </tbody>
             </table>
           </Card>

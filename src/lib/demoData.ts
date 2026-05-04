@@ -35,6 +35,7 @@ export function createDemoData(): RawAppData {
   const roster: Student[] = [];
   const diagnostics: DiagnosticResult[] = [];
   const reflections: Reflection[] = [];
+  const priorStaar: RawAppData["priorStaar"] = [];
 
   for (let i = 1; i <= 100; i += 1) {
     const classPeriod = String(Math.ceil(i / 25));
@@ -64,7 +65,15 @@ export function createDemoData(): RawAppData {
       concern: i % 6 === 0 ? "I get stuck when a problem has many steps." : "",
       preferred_support: supports[i % supports.length],
     });
+    priorStaar.push({
+      student_id: id,
+      prior_staar_year: "2025",
+      prior_staar_test: "Grade 8 Math",
+      prior_scale_score: String(1300 + ((i * 17) % 500)),
+      prior_performance_level: i % 10 === 0 ? "Masters" : i % 4 === 0 ? "Meets" : i % 3 === 0 ? "Approaches" : "Did Not Meet",
+      prior_growth_level: i % 5 === 0 ? "Expected" : "",
+    });
   }
 
-  return { roster, diagnostics, questionMap: defaultQuestionMap, reflections };
+  return { roster, diagnostics, questionMap: defaultQuestionMap, reflections, priorStaar };
 }

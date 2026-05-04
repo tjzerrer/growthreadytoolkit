@@ -2,13 +2,13 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Badge, bandTone, Card, EmptyState, masteryColor, PageHeader, StatCard } from "@/components/ui";
+import { Badge, bandTone, Card, EmptyState, masteryColor, PageHeader, StatCard, TrajectoryBadge, TrajectoryDisclaimer } from "@/components/ui";
 import { useGrowthData } from "@/lib/useGrowthData";
 
 export default function ClassDetailPage() {
   const params = useParams<{ period: string }>();
   const period = decodeURIComponent(params?.period ?? "");
-  const { data, rawData, ready } = useGrowthData();
+  const { data, rawData, ready, settings } = useGrowthData();
   if (ready && !data) return <EmptyState />;
 
   const summary = data?.classes.find((item) => item.period === period);
@@ -20,6 +20,7 @@ export default function ClassDetailPage() {
       <PageHeader title={summary?.label ?? `Period ${period}`} eyebrow="Individual class">
         Skill heatmap, intervention/enrichment groups, and deterministic recommended teacher moves.
       </PageHeader>
+      <TrajectoryDisclaimer />
 
       {summary && data ? (
         <>
@@ -28,6 +29,7 @@ export default function ClassDetailPage() {
             <StatCard label="Average score" value={`${summary.averagePercent}%`} detail={`${summary.averageScore} avg points`} />
             <StatCard label="Weakest skill" value={summary.weakestSkill} />
             <StatCard label="Enrichment" value={summary.enrichmentCount} />
+            <StatCard label="DNM risk" value={`${summary.trajectoryPercentages["Did Not Meet Risk"]}%`} />
           </section>
 
           <section className="mb-6 grid gap-4 lg:grid-cols-2">
@@ -85,9 +87,9 @@ export default function ClassDetailPage() {
             <Card className="table-wrap">
               <h2 className="mb-4 text-xl font-black text-[#174a36]">Student list</h2>
               <table>
-                <thead><tr><th>Student</th><th>Score</th><th>Band</th><th>Flags</th></tr></thead>
+                <thead><tr><th>Student</th><th>Score</th><th>Trajectory</th><th>Band</th><th>Flags</th></tr></thead>
                 <tbody>
-                  {students.map((student) => <tr key={student.student_id}><td><Link className="font-black underline" href={`/students/${student.student_id}`}>{student.first_name} {student.last_name}</Link></td><td>{student.incomplete ? "No data" : `${student.totalScore}/${student.totalPossible}`}</td><td><Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge></td><td>{student.incomplete ? "No Data / Not Started" : student.interventionFlags.join(", ") || (student.enrichment ? "Enrichment" : "None")}</td></tr>)}
+                  {students.map((student) => <tr key={student.student_id}><td><Link className="font-black underline" href={`/students/${student.student_id}`}>{student.first_name} {student.last_name}</Link></td><td>{student.incomplete ? "No data" : `${student.totalScore}/${student.totalPossible}`}</td><td><TrajectoryBadge trajectory={student.staarTrajectory} settings={settings} /></td><td><Badge tone={student.incomplete ? "neutral" : bandTone(student.readinessBand)}>{student.incomplete ? "No Data / Not Started" : student.readinessBand}</Badge></td><td>{student.incomplete ? "No Data / Not Started" : student.interventionFlags.join(", ") || (student.enrichment ? "Enrichment" : "None")}</td></tr>)}
                 </tbody>
               </table>
             </Card>

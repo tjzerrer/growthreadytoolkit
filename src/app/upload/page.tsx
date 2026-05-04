@@ -8,6 +8,7 @@ import {
   mergeQuestionMapWithDetected,
   normalizeDiagnostic,
   normalizeQuestionMap,
+  normalizePriorStaar,
   normalizeReflections,
   normalizeRoster,
   parseCsvFile,
@@ -18,7 +19,7 @@ import { createDemoData } from "@/lib/demoData";
 import { useGrowthData } from "@/lib/useGrowthData";
 import type { MyOpenMathParseResult, QuestionMapItem, RawAppData } from "@/lib/types";
 
-type FileKey = "roster" | "diagnostic" | "questionMap" | "reflections";
+type FileKey = "roster" | "diagnostic" | "questionMap" | "reflections" | "priorStaar";
 type UploadType = "myopenmath" | "simple";
 
 const samples = {
@@ -26,6 +27,7 @@ const samples = {
   diagnostic: "student_id, first_name, last_name, class_period, Q1, Q2, ... Q20",
   questionMap: "question_id, skill, teks, zone, critical",
   reflections: "student_id, confidence_rating, goal, concern, preferred_support",
+  priorStaar: "student_id, prior_staar_year, prior_staar_test, prior_scale_score, prior_performance_level, prior_growth_level",
 };
 
 export default function UploadPage() {
@@ -46,20 +48,22 @@ export default function UploadPage() {
       return null;
     }
     const matrix = await parseCsvMatrixFile(files.diagnostic);
-    const parsed = parseMyOpenMathDetailedRows(matrix.rows);
-    const mapRows = files.questionMap ? await parseCsvFile(files.questionMap) : { rows: [], errors: [] };
-    const normalizedMap = files.questionMap ? normalizeQuestionMap(mapRows.rows) : { data: [], errors: [] };
-    const questionMap = normalizedMap.data.length
-      ? mergeQuestionMapWithDetected(normalizedMap.data, parsed.detectedQuestions)
-      : createUnmappedQuestionMap(parsed.detectedQuestions);
+      const parsed = parseMyOpenMathDetailedRows(matrix.rows);
+      const mapRows = files.questionMap ? await parseCsvFile(files.questionMap) : { rows: [], errors: [] };
+      const priorRows = files.priorStaar ? await parseCsvFile(files.priorStaar) : { rows: [], errors: [] };
+      const normalizedMap = files.questionMap ? normalizeQuestionMap(mapRows.rows) : { data: [], errors: [] };
+      const normalizedPrior = files.priorStaar ? normalizePriorStaar(priorRows.rows) : { data: [], errors: [] };
+      const questionMap = normalizedMap.data.length
+        ? mergeQuestionMapWithDetected(normalizedMap.data, parsed.detectedQuestions)
+        : createUnmappedQuestionMap(parsed.detectedQuestions);
     setPreview(parsed);
     setPreviewMap(questionMap);
-    const allErrors = [...matrix.errors, ...parsed.errors, ...mapRows.errors, ...normalizedMap.errors];
+      const allErrors = [...matrix.errors, ...parsed.errors, ...mapRows.errors, ...priorRows.errors, ...normalizedMap.errors, ...normalizedPrior.errors];
     if (allErrors.length) {
       setErrors(allErrors);
       return null;
     }
-    return { parsed, questionMap };
+    return { parsed, questionMap, priorStaar: normalizedPrior.data };
   }
 
   async function generate() {
@@ -74,29 +78,32 @@ export default function UploadPage() {
     if (uploadType === "myopenmath") {
       const previewResult = await parseMyOpenMathPreview();
       if (!previewResult) return;
-      const { parsed, questionMap } = previewResult;
+      const { parsed, questionMap, priorStaar } = previewResult;
       saveData({
         roster: parsed.diagnostics.map(({ student_id, first_name, last_name, class_period }) => ({ student_id, first_name, last_name, class_period })),
         diagnostics: parsed.diagnostics,
         questionMap,
         reflections: [],
+        priorStaar,
       });
       setSuccess("MyOpenMath export parsed, previewed, and stored locally in this browser.");
       router.push("/");
       return;
     }
 
-    const [rosterCsv, diagnosticCsv, mapCsv, reflectionCsv] = await Promise.all([
+    const [rosterCsv, diagnosticCsv, mapCsv, reflectionCsv, priorCsv] = await Promise.all([
       parseCsvFile(files.roster as File),
       parseCsvFile(files.diagnostic),
       files.questionMap ? parseCsvFile(files.questionMap) : Promise.resolve({ rows: [], errors: [] }),
       files.reflections ? parseCsvFile(files.reflections) : Promise.resolve({ rows: [], errors: [] }),
+      files.priorStaar ? parseCsvFile(files.priorStaar) : Promise.resolve({ rows: [], errors: [] }),
     ]);
 
     const roster = normalizeRoster(rosterCsv.rows);
     const diagnostics = normalizeDiagnostic(diagnosticCsv.rows);
     const questionMap = files.questionMap ? normalizeQuestionMap(mapCsv.rows) : { data: createUnmappedQuestionMap(Object.keys(diagnostics.data[0]?.answers ?? {}).map((question_label) => ({ question_label }))), errors: [] };
-    const allErrors = [...rosterCsv.errors, ...diagnosticCsv.errors, ...mapCsv.errors, ...reflectionCsv.errors, ...roster.errors, ...diagnostics.errors, ...questionMap.errors];
+    const priorStaar = files.priorStaar ? normalizePriorStaar(priorCsv.rows) : { data: [], errors: [] };
+    const allErrors = [...rosterCsv.errors, ...diagnosticCsv.errors, ...mapCsv.errors, ...reflectionCsv.errors, ...priorCsv.errors, ...roster.errors, ...diagnostics.errors, ...questionMap.errors, ...priorStaar.errors];
     if (allErrors.length) {
       setErrors(allErrors);
       return;
@@ -107,6 +114,7 @@ export default function UploadPage() {
       diagnostics: diagnostics.data,
       questionMap: questionMap.data,
       reflections: normalizeReflections(reflectionCsv.rows),
+      priorStaar: priorStaar.data,
     };
     saveData(data);
     setSuccess("Insights generated and stored locally in this browser.");
@@ -123,6 +131,7 @@ export default function UploadPage() {
     { key: "diagnostic", title: uploadType === "myopenmath" ? "MyOpenMath detailed assignment export CSV" : "Simple diagnostic CSV" },
     { key: "questionMap", title: "Question map CSV", optional: true },
     { key: "reflections", title: "Student reflection CSV", optional: true },
+    { key: "priorStaar", title: "Prior STAAR data CSV", optional: true },
   ];
 
   return (

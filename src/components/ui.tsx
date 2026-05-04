@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { defaultSettings } from "@/lib/settings";
+import type { AppSettings, GrowthIndicator, StaarTrajectory } from "@/lib/types";
 
 export function PageHeader({ title, eyebrow, children }: { title: string; eyebrow?: string; children?: ReactNode }) {
   return (
@@ -60,6 +62,31 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
     neutral: "bg-stone-100 text-stone-700 border-stone-200",
   };
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${styles[tone]}`}>{children}</span>;
+}
+
+export function TrajectoryBadge({ trajectory, settings = defaultSettings }: { trajectory: StaarTrajectory; settings?: AppSettings }) {
+  const badge = settings.trajectory.badges[trajectory];
+  const colors = {
+    blue: "bg-sky-100 text-sky-900 border-sky-300",
+    green: "bg-emerald-100 text-emerald-900 border-emerald-300",
+    yellow: "bg-yellow-100 text-yellow-900 border-yellow-300",
+    red: "bg-red-100 text-red-900 border-red-300",
+  };
+  const symbol = badge.icon.toLowerCase().includes("shield") ? "Shield" : "Badge";
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-black ${colors[badge.color]}`}>{symbol}: {badge.name}</span>;
+}
+
+export function GrowthBadge({ indicator }: { indicator: GrowthIndicator }) {
+  const tone = indicator === "Accelerating" ? "blue" : indicator === "On Track" ? "green" : indicator === "At Risk" ? "red" : indicator === "Flat" ? "yellow" : "neutral";
+  return <Badge tone={tone}>{indicator}</Badge>;
+}
+
+export function TrajectoryDisclaimer() {
+  return (
+    <Card className="mb-6 border-sky-200 bg-sky-50 text-sm text-sky-950">
+      <strong>STAAR trajectory note:</strong> Trajectory badges are instructional estimates based on current classroom evidence. Official STAAR performance levels are determined by TEA scale scores and official testing data.
+    </Card>
+  );
 }
 
 export function bandTone(band: string): "red" | "yellow" | "green" | "blue" {
