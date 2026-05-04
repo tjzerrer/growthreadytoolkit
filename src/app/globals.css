@@ -67,6 +67,6 @@ td {
   vertical-align: top;
 }
 
-a {
+a:not([class]) {
   color: inherit;
 }
