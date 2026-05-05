@@ -17,7 +17,7 @@ export default function StudentsPage() {
               <tbody>
                 {db.snapshot.students.map((student) => {
                   const history = buildStudentTeksHistory(db.snapshot, student.id);
-                  return <tr key={student.id}><td><Link className="font-black text-[#174a36] underline" href={`/student/${student.id}`}>{student.display_name}</Link></td><td>{db.snapshot.classes.find((klass) => klass.id === student.class_id)?.name || "Unassigned"}</td><td>{db.snapshot.evidence.filter((row) => row.student_id === student.id).length}</td><td>{history[0]?.teksCode || "No TEKS evidence"}</td><td>{history[0]?.recommendedNextMove || "Collect more evidence before making a decision."}</td></tr>;
+                  return <tr key={student.id}><td><Link className="font-black text-[#174a36] underline" href={`/student/${student.id}`}>{student.display_name}</Link></td><td>{db.snapshot.classes.find((klass) => klass.id === student.class_id)?.class_name || "Unassigned"}</td><td>{db.snapshot.evidence.filter((row) => row.student_id === student.id).length}</td><td>{history[0]?.teksCode || "No TEKS evidence"}</td><td>{history[0]?.recommendedNextMove || "Collect more evidence before making a decision."}</td></tr>;
                 })}
               </tbody>
             </table>

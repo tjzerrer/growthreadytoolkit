@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { Button, Card, PageHeader } from "@/components/ui";
 import { downloadCsv, parseCsvFile } from "@/lib/csv";
-import { parsePipeTag } from "@/lib/dbMastery";
+import { parsePipeTag } from "@/lib/parsePipeTag";
 
 export default function TeksMappingPage() {
   const [assignmentId, setAssignmentId] = useState("all");
@@ -28,9 +28,9 @@ export default function TeksMappingPage() {
               teacher_id: db.teacher.id,
               question_id: questionId,
               raw_tag: rawTag,
-              teks_code: parsed.teksCode || null,
-              skill_description: parsed.skillDescription || null,
-              standard_type: parsed.standardType || null,
+              teks_code: parsed.teks_code || null,
+              skill_description: parsed.skill_description || null,
+              standard_type: parsed.standard_type || null,
               priority: parsed.priority || null,
               complexity: parsed.complexity || null,
               reporting_category_id: null,
@@ -38,7 +38,7 @@ export default function TeksMappingPage() {
             };
             await db.supabase.from("question_tags").upsert(payload, { onConflict: "question_id" });
             if (question) {
-              await db.supabase.from("evidence").update({ teks_code: parsed.teksCode || null }).eq("question_id", question.id).eq("teacher_id", db.teacher.id);
+              await db.supabase.from("evidence").update({ teks_code: parsed.teks_code || null }).eq("question_id", question.id).eq("teacher_id", db.teacher.id);
             }
             await db.refresh();
           }
@@ -47,10 +47,10 @@ export default function TeksMappingPage() {
             downloadCsv("growthready-question-map.csv", questions.map((question) => {
               const tag = tagByQuestion.get(question.id);
               return {
-                assignment: db.snapshot.assignments.find((assignment) => assignment.id === question.assignment_id)?.name,
+                assignment: db.snapshot.assignments.find((assignment) => assignment.id === question.assignment_id)?.assignment_name,
                 mom_question_label: question.mom_question_label,
                 mom_question_id: question.mom_question_id || "",
-                points_possible: question.points_possible,
+                points_possible: question.points_possible ?? 0,
                 raw_tag: tag?.raw_tag || "",
                 teks_code: tag?.teks_code || "",
                 skill_description: tag?.skill_description || "",
@@ -75,7 +75,7 @@ export default function TeksMappingPage() {
               <div className="mb-4 flex flex-wrap gap-3">
                 <select className="rounded-2xl border border-[#d6cdbb] bg-white p-3" value={assignmentId} onChange={(event) => setAssignmentId(event.target.value)}>
                   <option value="all">All assignments</option>
-                  {db.snapshot.assignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.name}</option>)}
+                  {db.snapshot.assignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.assignment_name}</option>)}
                 </select>
                 <Button onClick={exportMap} variant="soft">Export Question Map CSV</Button>
                 <Button onClick={() => fileRef.current?.click()} variant="soft">Import Question Map CSV</Button>
@@ -90,12 +90,12 @@ export default function TeksMappingPage() {
                       const parsed = parsePipeTag(tag?.raw_tag || "");
                       return (
                         <tr key={question.id}>
-                          <td>{db.snapshot.assignments.find((assignment) => assignment.id === question.assignment_id)?.name}</td>
+                          <td>{db.snapshot.assignments.find((assignment) => assignment.id === question.assignment_id)?.assignment_name}</td>
                           <td className="font-black">{question.mom_question_label}</td>
                           <td>{question.mom_question_id}</td>
                           <td>{question.points_possible}</td>
                           <td><input className="min-w-96 rounded-xl border border-[#d6cdbb] bg-white p-2" defaultValue={tag?.raw_tag || ""} onBlur={(event) => saveTag(question.id, event.target.value)} /></td>
-                          <td>{parsed.teksCode || "Unmapped"} | {parsed.skillDescription}</td>
+                          <td>{parsed.teks_code || "Unmapped"} | {parsed.skill_description}</td>
                         </tr>
                       );
                     })}

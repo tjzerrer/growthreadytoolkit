@@ -46,11 +46,6 @@ export type StudentTeksHistory = {
 const round = (value: number) => Math.round(value * 10) / 10;
 const average = (rows: DbEvidence[]) => rows.length ? round(rows.reduce((sum, row) => sum + Number(row.percent), 0) / rows.length) : 0;
 
-export function parsePipeTag(rawTag: string) {
-  const [teksCode = "", skillDescription = "", standardType = "", priority = "", complexity = ""] = rawTag.split("|").map((part) => part.trim());
-  return { teksCode, skillDescription, standardType, priority, complexity };
-}
-
 export function masteryStatus(recentAverage: number, evidenceCount: number): MasteryStatus {
   if (evidenceCount < 2) return "Not Enough Evidence";
   if (recentAverage >= 85 && evidenceCount >= 4) return "Mastered";
@@ -61,7 +56,7 @@ export function masteryStatus(recentAverage: number, evidenceCount: number): Mas
 
 export function movementForEvidence(rows: DbEvidence[], status: MasteryStatus): MovementLabel {
   if (rows.length < 4) return "Not Enough Evidence";
-  const sorted = [...rows].sort((a, b) => a.date_administered.localeCompare(b.date_administered));
+  const sorted = [...rows].sort((a, b) => (a.date_administered ?? "").localeCompare(b.date_administered ?? ""));
   const midpoint = Math.floor(sorted.length / 2);
   const earlier = average(sorted.slice(0, midpoint));
   const recent = average(sorted.slice(midpoint));
@@ -81,7 +76,7 @@ export function recommendedMove(status: MasteryStatus) {
 }
 
 function recentRows(rows: DbEvidence[]) {
-  return [...rows].sort((a, b) => b.date_administered.localeCompare(a.date_administered)).slice(0, 5);
+  return [...rows].sort((a, b) => (b.date_administered ?? "").localeCompare(a.date_administered ?? "")).slice(0, 5);
 }
 
 function tagForTeks(tags: DbQuestionTag[], teksCode: string) {
@@ -138,7 +133,7 @@ export function buildStudentTeksHistory(snapshot: DbSnapshot, studentId: string)
       allTimeAverage: average(rows),
       status,
       movement: movementForEvidence(rows, status),
-      lastEvidenceDate: [...rows].sort((a, b) => b.date_administered.localeCompare(a.date_administered))[0]?.date_administered || "",
+      lastEvidenceDate: [...rows].sort((a, b) => (b.date_administered ?? "").localeCompare(a.date_administered ?? ""))[0]?.date_administered || "",
       recommendedNextMove: recommendedMove(status),
     };
   }).sort((a, b) => a.recentAverage - b.recentAverage);

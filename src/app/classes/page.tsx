@@ -19,9 +19,9 @@ export default function ClassesPage() {
               <tbody>
                 {db.snapshot.classes.map((klass) => {
                   const evidence = db.snapshot.evidence.filter((row) => row.class_id === klass.id);
-                  const average = evidence.length ? Math.round(evidence.reduce((sum, row) => sum + row.percent, 0) / evidence.length * 10) / 10 : 0;
+                  const average = evidence.length ? Math.round(evidence.reduce((sum, row) => sum + Number(row.percent ?? 0), 0) / evidence.length * 10) / 10 : 0;
                   const mastery = buildTeksMastery(db.snapshot, klass.id);
-                  return <tr key={klass.id}><td><Link className="font-black text-[#174a36] underline" href={`/classes/${klass.id}`}>{klass.name}</Link><br /><span className="text-sm text-[#647067]">{klass.period_label}</span></td><td>{db.snapshot.students.filter((student) => student.class_id === klass.id).length}</td><td>{evidence.length}</td><td>{average}%</td><td>{mastery.slice(0, 3).map((row) => `${row.teksCode} ${row.classAverage}%`).join(", ") || "No TEKS evidence"}</td><td>{mastery.filter((row) => row.status === "Mastered").length}</td></tr>;
+                  return <tr key={klass.id}><td><Link className="font-black text-[#174a36] underline" href={`/classes/${klass.id}`}>{klass.class_name}</Link><br /><span className="text-sm text-[#647067]">{klass.period_label}</span></td><td>{db.snapshot.students.filter((student) => student.class_id === klass.id).length}</td><td>{evidence.length}</td><td>{average}%</td><td>{mastery.slice(0, 3).map((row) => `${row.teksCode} ${row.classAverage}%`).join(", ") || "No TEKS evidence"}</td><td>{mastery.filter((row) => row.status === "Mastered").length}</td></tr>;
                 })}
               </tbody>
             </table>

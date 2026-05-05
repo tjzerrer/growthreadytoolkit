@@ -17,13 +17,13 @@ export default function ClassDetailPage() {
           const klass = db.snapshot.classes.find((item) => item.id === classId);
           const students = db.snapshot.students.filter((student) => student.class_id === classId);
           const evidence = db.snapshot.evidence.filter((row) => row.class_id === classId);
-          const average = evidence.length ? Math.round(evidence.reduce((sum, row) => sum + row.percent, 0) / evidence.length * 10) / 10 : 0;
+          const average = evidence.length ? Math.round(evidence.reduce((sum, row) => sum + Number(row.percent ?? 0), 0) / evidence.length * 10) / 10 : 0;
           const mastery = buildTeksMastery(db.snapshot, classId);
           const support = students.filter((student) => buildStudentTeksHistory(db.snapshot, student.id).some((row) => row.status === "Struggling" || row.status === "Approaching"));
           const enrichment = students.filter((student) => buildStudentTeksHistory(db.snapshot, student.id).some((row) => row.status === "Mastered"));
           return (
             <>
-              <PageHeader title={klass?.name || "Class"} eyebrow="Class dashboard">Average score, TEKS mastery summary, priority TEKS, support groups, and enrichment-ready students.</PageHeader>
+              <PageHeader title={klass?.class_name || "Class"} eyebrow="Class dashboard">Average score, TEKS mastery summary, priority TEKS, support groups, and enrichment-ready students.</PageHeader>
               <section className="mb-6 grid gap-4 md:grid-cols-4">
                 <StatCard label="Students" value={students.length} />
                 <StatCard label="Average score" value={`${average}%`} />
