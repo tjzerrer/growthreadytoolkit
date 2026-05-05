@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { defaultSettings } from "@/lib/settings";
-import type { AppSettings, GrowthIndicator, StaarTrajectory } from "@/lib/types";
+import type { AppSettings, GrowthIndicator, StaarTrajectory, TeksMovement, TeksPriority, TeksStatus } from "@/lib/types";
 
 export function PageHeader({ title, eyebrow, children }: { title: string; eyebrow?: string; children?: ReactNode }) {
   return (
@@ -41,13 +41,13 @@ export function ButtonLink({ href, children }: { href: string; children: ReactNo
   );
 }
 
-export function Button({ children, onClick, variant = "primary", type = "button" }: { children: ReactNode; onClick?: () => void; variant?: "primary" | "soft"; type?: "button" | "submit" }) {
+export function Button({ children, onClick, variant = "primary", type = "button", disabled = false }: { children: ReactNode; onClick?: () => void; variant?: "primary" | "soft"; type?: "button" | "submit"; disabled?: boolean }) {
   const style =
     variant === "primary"
       ? "bg-[#174a36] text-white shadow-lg shadow-[#174a36]/20 hover:bg-[#0f3525]"
       : "border border-[#d6cdbb] bg-white/70 text-[#174a36] hover:bg-[#dbe8d2]";
   return (
-    <button type={type} onClick={onClick} className={`rounded-2xl px-5 py-3 text-sm font-black transition hover:-translate-y-0.5 ${style}`}>
+    <button type={type} onClick={onClick} disabled={disabled} className={`rounded-2xl px-5 py-3 text-sm font-black transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${style}`}>
       {children}
     </button>
   );
@@ -101,6 +101,29 @@ export function masteryColor(value: number) {
   if (value < 70) return "bg-orange-100 text-orange-900";
   if (value < 80) return "bg-yellow-100 text-yellow-900";
   return "bg-emerald-100 text-emerald-900";
+}
+
+export function teksStatusTone(status: TeksStatus): "red" | "yellow" | "green" | "blue" | "neutral" {
+  if (status === "Mastered") return "blue";
+  if (status === "Proficient") return "green";
+  if (status === "Approaching") return "yellow";
+  if (status === "Struggling") return "red";
+  return "neutral";
+}
+
+export function movementTone(movement: TeksMovement): "red" | "yellow" | "green" | "blue" | "neutral" {
+  if (movement === "Improving") return "blue";
+  if (movement === "Stable") return "green";
+  if (movement === "Slipping") return "red";
+  if (movement === "Stuck") return "yellow";
+  return "neutral";
+}
+
+export function priorityTone(priority: TeksPriority): "red" | "yellow" | "green" | "blue" | "neutral" {
+  if (priority === "High Priority") return "red";
+  if (priority === "Medium Priority") return "yellow";
+  if (priority === "Low Priority") return "green";
+  return "neutral";
 }
 
 export function EmptyState() {

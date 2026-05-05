@@ -1,216 +1,164 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { AuthGate } from "@/components/AuthGate";
 import { Button, Card, PageHeader } from "@/components/ui";
-import {
-  createUnmappedQuestionMap,
-  mergeQuestionMapWithDetected,
-  normalizeDiagnostic,
-  normalizeQuestionMap,
-  normalizePriorStaar,
-  normalizeReflections,
-  normalizeRoster,
-  parseCsvFile,
-  parseCsvMatrixFile,
-  parseMyOpenMathDetailedRows,
-} from "@/lib/csv";
-import { createDemoData } from "@/lib/demoData";
-import { useGrowthData } from "@/lib/useGrowthData";
-import type { MyOpenMathParseResult, QuestionMapItem, RawAppData } from "@/lib/types";
+import { parseCsvMatrixFile, parseMyOpenMathDetailedRows } from "@/lib/csv";
+import type { MyOpenMathParseResult } from "@/lib/types";
 
-type FileKey = "roster" | "diagnostic" | "questionMap" | "reflections" | "priorStaar";
-type UploadType = "myopenmath" | "simple";
-
-const samples = {
-  roster: "student_id, first_name, last_name, class_period",
-  diagnostic: "student_id, first_name, last_name, class_period, Q1, Q2, ... Q20",
-  questionMap: "question_id, skill, teks, zone, critical",
-  reflections: "student_id, confidence_rating, goal, concern, preferred_support",
-  priorStaar: "student_id, prior_staar_year, prior_staar_test, prior_scale_score, prior_performance_level, prior_growth_level",
-};
+type AssignmentType = "Diagnostic" | "Practice" | "Quiz" | "Test" | "Review" | "Other";
 
 export default function UploadPage() {
-  const router = useRouter();
-  const { saveData } = useGrowthData();
-  const [files, setFiles] = useState<Partial<Record<FileKey, File>>>({});
-  const [errors, setErrors] = useState<string[]>([]);
-  const [success, setSuccess] = useState("");
-  const [uploadType, setUploadType] = useState<UploadType>("myopenmath");
+  const [file, setFile] = useState<File | null>(null);
+  const [assignmentName, setAssignmentName] = useState("");
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>("Diagnostic");
+  const [dateAdministered, setDateAdministered] = useState(new Date().toISOString().slice(0, 10));
   const [preview, setPreview] = useState<MyOpenMathParseResult | null>(null);
-  const [previewMap, setPreviewMap] = useState<QuestionMapItem[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  async function parseMyOpenMathPreview() {
+  async function parsePreview() {
     setErrors([]);
-    setSuccess("");
-    if (!files.diagnostic) {
-      setErrors(["MyOpenMath detailed export CSV is required."]);
-      return null;
+    if (!file) {
+      setErrors(["Choose a MyOpenMath detailed CSV export first."]);
+      return;
     }
-    const matrix = await parseCsvMatrixFile(files.diagnostic);
-      const parsed = parseMyOpenMathDetailedRows(matrix.rows);
-      const mapRows = files.questionMap ? await parseCsvFile(files.questionMap) : { rows: [], errors: [] };
-      const priorRows = files.priorStaar ? await parseCsvFile(files.priorStaar) : { rows: [], errors: [] };
-      const normalizedMap = files.questionMap ? normalizeQuestionMap(mapRows.rows) : { data: [], errors: [] };
-      const normalizedPrior = files.priorStaar ? normalizePriorStaar(priorRows.rows) : { data: [], errors: [] };
-      const questionMap = normalizedMap.data.length
-        ? mergeQuestionMapWithDetected(normalizedMap.data, parsed.detectedQuestions)
-        : createUnmappedQuestionMap(parsed.detectedQuestions);
+    const matrix = await parseCsvMatrixFile(file);
+    const parsed = parseMyOpenMathDetailedRows(matrix.rows);
     setPreview(parsed);
-    setPreviewMap(questionMap);
-      const allErrors = [...matrix.errors, ...parsed.errors, ...mapRows.errors, ...priorRows.errors, ...normalizedMap.errors, ...normalizedPrior.errors];
-    if (allErrors.length) {
-      setErrors(allErrors);
-      return null;
-    }
-    return { parsed, questionMap, priorStaar: normalizedPrior.data };
+    setErrors([...matrix.errors, ...parsed.errors]);
+    if (!assignmentName) setAssignmentName(file.name.replace(/\.csv$/i, ""));
   }
-
-  async function generate() {
-    setErrors([]);
-    setSuccess("");
-    setPreview(null);
-    if (!files.diagnostic || (uploadType === "simple" && !files.roster)) {
-      setErrors([uploadType === "simple" ? "Roster and diagnostic CSV files are required for Simple Diagnostic CSV." : "MyOpenMath detailed export CSV is required."]);
-      return;
-    }
-
-    if (uploadType === "myopenmath") {
-      const previewResult = await parseMyOpenMathPreview();
-      if (!previewResult) return;
-      const { parsed, questionMap, priorStaar } = previewResult;
-      saveData({
-        roster: parsed.diagnostics.map(({ student_id, first_name, last_name, class_period }) => ({ student_id, first_name, last_name, class_period })),
-        diagnostics: parsed.diagnostics,
-        questionMap,
-        reflections: [],
-        priorStaar,
-      });
-      setSuccess("MyOpenMath export parsed, previewed, and stored locally in this browser.");
-      router.push("/");
-      return;
-    }
-
-    const [rosterCsv, diagnosticCsv, mapCsv, reflectionCsv, priorCsv] = await Promise.all([
-      parseCsvFile(files.roster as File),
-      parseCsvFile(files.diagnostic),
-      files.questionMap ? parseCsvFile(files.questionMap) : Promise.resolve({ rows: [], errors: [] }),
-      files.reflections ? parseCsvFile(files.reflections) : Promise.resolve({ rows: [], errors: [] }),
-      files.priorStaar ? parseCsvFile(files.priorStaar) : Promise.resolve({ rows: [], errors: [] }),
-    ]);
-
-    const roster = normalizeRoster(rosterCsv.rows);
-    const diagnostics = normalizeDiagnostic(diagnosticCsv.rows);
-    const questionMap = files.questionMap ? normalizeQuestionMap(mapCsv.rows) : { data: createUnmappedQuestionMap(Object.keys(diagnostics.data[0]?.answers ?? {}).map((question_label) => ({ question_label }))), errors: [] };
-    const priorStaar = files.priorStaar ? normalizePriorStaar(priorCsv.rows) : { data: [], errors: [] };
-    const allErrors = [...rosterCsv.errors, ...diagnosticCsv.errors, ...mapCsv.errors, ...reflectionCsv.errors, ...priorCsv.errors, ...roster.errors, ...diagnostics.errors, ...questionMap.errors, ...priorStaar.errors];
-    if (allErrors.length) {
-      setErrors(allErrors);
-      return;
-    }
-
-    const data: RawAppData = {
-      roster: roster.data,
-      diagnostics: diagnostics.data,
-      questionMap: questionMap.data,
-      reflections: normalizeReflections(reflectionCsv.rows),
-      priorStaar: priorStaar.data,
-    };
-    saveData(data);
-    setSuccess("Insights generated and stored locally in this browser.");
-    router.push("/");
-  }
-
-  function loadDemo() {
-    saveData(createDemoData());
-    router.push("/");
-  }
-
-  const cards: { key: FileKey; title: string; optional?: boolean }[] = [
-    { key: "roster", title: "Student roster CSV", optional: uploadType === "myopenmath" },
-    { key: "diagnostic", title: uploadType === "myopenmath" ? "MyOpenMath detailed assignment export CSV" : "Simple diagnostic CSV" },
-    { key: "questionMap", title: "Question map CSV", optional: true },
-    { key: "reflections", title: "Student reflection CSV", optional: true },
-    { key: "priorStaar", title: "Prior STAAR data CSV", optional: true },
-  ];
 
   return (
     <>
-      <PageHeader title="Upload Data" eyebrow="CSV wizard">
-        Upload exported CSVs manually. No student data leaves this browser, and Version 1 does not log in to or scrape MyOpenMath.
+      <PageHeader title="Upload MyOpenMath CSV" eyebrow="Evidence import">
+        Upload the detailed MyOpenMath CSV. GrowthReady parses it locally, previews it, then stores dated question evidence under your teacher account.
       </PageHeader>
+      <AuthGate>
+        {(db) => {
+          async function confirmImport() {
+            if (!preview || !db.teacher || !db.supabase) return;
+            setSaving(true);
+            setErrors([]);
+            const totalPoints = preview.detectedQuestions.reduce((sum, question) => sum + question.points_possible, 0);
+            const assignment = await db.supabase.from("assignments").insert({
+              teacher_id: db.teacher.id,
+              name: assignmentName || "MyOpenMath Assignment",
+              source: "MyOpenMath",
+              assignment_type: assignmentType,
+              date_administered: dateAdministered,
+              total_points: totalPoints,
+            }).select("*").single();
+            if (assignment.error) {
+              setErrors([assignment.error.message]);
+              setSaving(false);
+              return;
+            }
 
-      <div className="mb-6 flex flex-wrap gap-3">
-        <select className="rounded-2xl border border-[#d6cdbb] bg-white p-3 font-bold text-[#174a36]" value={uploadType} onChange={(event) => setUploadType(event.target.value as UploadType)}>
-          <option value="myopenmath">MyOpenMath Detailed Assignment Export</option>
-          <option value="simple">Simple Diagnostic CSV</option>
-        </select>
-        {uploadType === "myopenmath" ? <Button onClick={async () => { await parseMyOpenMathPreview(); }} variant="soft">Parse Preview</Button> : null}
-        <Button onClick={generate}>Generate Insights</Button>
-        <Button onClick={loadDemo} variant="soft">Load Demo Data</Button>
-      </div>
+            const classBySection = new Map<string, string>();
+            for (const section of Array.from(new Set(preview.diagnostics.map((row) => row.class_period || "Unassigned")))) {
+              const existing = db.snapshot.classes.find((item) => item.period_label === section);
+              if (existing) {
+                classBySection.set(section, existing.id);
+              } else {
+                const inserted = await db.supabase.from("classes").insert({
+                  teacher_id: db.teacher.id,
+                  name: section === "Unassigned" ? "Unassigned" : `Period ${section}`,
+                  period_label: section,
+                  term: null,
+                  school_year: db.teacher.school_year,
+                }).select("*").single();
+                if (inserted.data) classBySection.set(section, inserted.data.id);
+              }
+            }
 
-      {errors.length ? (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <p className="font-black text-red-900">Please fix these upload issues:</p>
-          <ul className="mt-2 list-disc pl-6 text-red-800">
-            {errors.map((error) => <li key={error}>{error}</li>)}
-          </ul>
-        </Card>
-      ) : null}
-      {success ? <Card className="mb-6 border-emerald-200 bg-emerald-50 text-emerald-900">{success}</Card> : null}
+            const studentIdByImportId = new Map<string, string>();
+            for (const row of preview.diagnostics) {
+              const classId = classBySection.get(row.class_period || "Unassigned") ?? null;
+              const displayName = row.student_name || `${row.first_name} ${row.last_name}`;
+              const existing = db.snapshot.students.find((student) => student.display_name === displayName && student.class_id === classId);
+              if (existing) {
+                studentIdByImportId.set(row.student_id, existing.id);
+              } else {
+                const inserted = await db.supabase.from("students").insert({
+                  teacher_id: db.teacher.id,
+                  class_id: classId,
+                  local_student_id: row.email || row.student_id,
+                  display_name: displayName,
+                  first_name: row.first_name,
+                  last_name: row.last_name,
+                  active: true,
+                }).select("*").single();
+                if (inserted.data) studentIdByImportId.set(row.student_id, inserted.data.id);
+              }
+            }
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {cards.map((card) => (
-          <Card key={card.key}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-black text-[#174a36]">{card.title}</h2>
-                <p className="mt-2 text-sm text-[#647067]">{card.optional ? "Optional columns:" : "Expected columns:"} {samples[card.key]}</p>
-                {card.key === "diagnostic" && uploadType === "myopenmath" ? <p className="mt-2 text-sm text-[#647067]">Uses row 1 question labels, row 2 Points columns, row 3 MyOpenMath IDs, and row 4+ student rows.</p> : null}
-              </div>
-              {card.optional ? <span className="rounded-full bg-[#d8ebf4] px-3 py-1 text-xs font-black text-[#19506a]">Optional</span> : null}
-            </div>
-            <input
-              className="mt-5 w-full rounded-2xl border border-[#d6cdbb] bg-white p-3"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => setFiles((current) => ({ ...current, [card.key]: event.target.files?.[0] }))}
-            />
-          </Card>
-        ))}
-      </section>
+            const questionRows = await db.supabase.from("questions").insert(preview.detectedQuestions.map((question) => ({
+              teacher_id: db.teacher?.id,
+              assignment_id: assignment.data.id,
+              mom_question_label: question.question_label,
+              mom_question_id: question.myopenmath_question_id,
+              points_possible: question.points_possible,
+            }))).select("*");
+            if (questionRows.error) {
+              setErrors([questionRows.error.message]);
+              setSaving(false);
+              return;
+            }
+            const questionIdByLabel = new Map((questionRows.data ?? []).map((question) => [question.mom_question_label, question.id]));
+            const evidenceRows = preview.diagnostics.flatMap((student) => preview.detectedQuestions.map((question) => {
+              const score = Number(student.answers[question.question_id] ?? 0);
+              const possible = Number(student.possiblePoints?.[question.question_id] ?? question.points_possible);
+              return {
+                teacher_id: db.teacher?.id,
+                student_id: studentIdByImportId.get(student.student_id),
+                class_id: classBySection.get(student.class_period || "Unassigned"),
+                assignment_id: assignment.data.id,
+                question_id: questionIdByLabel.get(question.question_label),
+                teks_code: null,
+                score,
+                points_possible: possible,
+                percent: possible ? Math.round((score / possible) * 1000) / 10 : 0,
+                date_administered: dateAdministered,
+              };
+            }).filter((row) => row.student_id && row.question_id));
+            const evidence = await db.supabase.from("evidence").insert(evidenceRows);
+            if (evidence.error) setErrors([evidence.error.message]);
+            await db.refresh();
+            setSaving(false);
+          }
 
-      <Card className="mt-6">
-        <h2 className="text-xl font-black text-[#174a36]">Question map sample</h2>
-        <p className="mt-2 text-sm text-[#647067]">Simple format: question_id,skill,teks,zone,critical. MyOpenMath format: question_label,skill,teks,zone,critical. Example: Question 1-1,Integer Operations,Readiness,Number Sense,Yes.</p>
-      </Card>
-
-      {preview ? (
-        <section className="mt-6 grid gap-6">
-          <Card className="table-wrap">
-            <h2 className="mb-4 text-xl font-black text-[#174a36]">Parsed student preview</h2>
-            <table>
-              <thead><tr><th>Student name</th><th>Section</th><th>Email</th><th>Attempted</th><th>Earned</th><th>Possible</th><th>Percent</th></tr></thead>
-              <tbody>
-                {preview.previewStudents.slice(0, 20).map((student, index) => <tr key={`${student.email}-${index}`}><td>{student.student_name}</td><td>{student.section}</td><td>{student.email}</td><td>{student.attemptedQuestionCount}</td><td>{student.totalPointsEarned}</td><td>{student.totalPointsPossible}</td><td>{student.percentScore}%</td></tr>)}
-              </tbody>
-            </table>
-          </Card>
-          <Card className="table-wrap">
-            <h2 className="mb-4 text-xl font-black text-[#174a36]">Detected questions</h2>
-            <table>
-              <thead><tr><th>Question label</th><th>MyOpenMath ID</th><th>Points possible</th><th>Skill mapping status</th></tr></thead>
-              <tbody>
-                {preview.detectedQuestions.map((question) => {
-                  const mapped = previewMap.find((item) => item.question_id === question.question_id);
-                  return <tr key={question.question_id}><td>{question.question_label}</td><td>{question.myopenmath_question_id}</td><td>{question.points_possible}</td><td>{mapped && mapped.skill !== "Unmapped Questions" ? `Mapped: ${mapped.skill}` : "Unmapped Questions"}</td></tr>;
-                })}
-              </tbody>
-            </table>
-          </Card>
-        </section>
-      ) : null}
+          return (
+            <>
+              <Card className="mb-6">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <input className="rounded-2xl border border-[#d6cdbb] bg-white p-3" value={assignmentName} onChange={(event) => setAssignmentName(event.target.value)} placeholder="Assignment name" />
+                  <select className="rounded-2xl border border-[#d6cdbb] bg-white p-3" value={assignmentType} onChange={(event) => setAssignmentType(event.target.value as AssignmentType)}>
+                    {["Diagnostic", "Practice", "Quiz", "Test", "Review", "Other"].map((option) => <option key={option}>{option}</option>)}
+                  </select>
+                  <input className="rounded-2xl border border-[#d6cdbb] bg-white p-3" type="date" value={dateAdministered} onChange={(event) => setDateAdministered(event.target.value)} />
+                  <input className="rounded-2xl border border-[#d6cdbb] bg-white p-3" type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+                </div>
+                <div className="mt-4 flex gap-3">
+                  <Button onClick={parsePreview} variant="soft">Preview CSV</Button>
+                  <Button onClick={confirmImport} disabled={saving || !preview}>Confirm Import</Button>
+                </div>
+              </Card>
+              {errors.length ? <Card className="mb-6 border-red-200 bg-red-50"><ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul></Card> : null}
+              {preview ? (
+                <section className="grid gap-6">
+                  <Card><strong>{preview.previewStudents.length}</strong> students, <strong>{preview.detectedQuestions.length}</strong> scored questions detected.</Card>
+                  <Card className="table-wrap">
+                    <h2 className="mb-4 text-xl font-black text-[#174a36]">Question preview</h2>
+                    <table><thead><tr><th>Question</th><th>MOM ID</th><th>Points</th></tr></thead><tbody>{preview.detectedQuestions.map((question) => <tr key={question.question_label}><td>{question.question_label}</td><td>{question.myopenmath_question_id}</td><td>{question.points_possible}</td></tr>)}</tbody></table>
+                  </Card>
+                </section>
+              ) : null}
+            </>
+          );
+        }}
+      </AuthGate>
     </>
   );
 }

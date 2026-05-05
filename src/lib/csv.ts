@@ -1,7 +1,7 @@
 "use client";
 
 import Papa from "papaparse";
-import type { DiagnosticResult, MyOpenMathParseResult, PriorStaarRecord, QuestionMapItem, Reflection, Student } from "./types";
+import type { AssignmentType, DiagnosticResult, EvidenceType, MyOpenMathParseResult, PriorStaarRecord, QuestionMapItem, Reflection, ReportingCategory, Student } from "./types";
 
 export type ParsedUpload = {
   rows: Record<string, string>[];
@@ -96,8 +96,15 @@ export function normalizeQuestionMap(rows: Record<string, string>[]): { data: Qu
       points_possible: row.points_possible ? Number(row.points_possible) : 1,
       skill: row.skill?.trim(),
       teks: row.teks?.trim(),
+      breakout_id: row.breakout_id?.trim(),
+      teacher_description: row.teacher_description?.trim(),
       zone: row.zone?.trim(),
       critical: /^(y|yes|true|1)$/i.test(row.critical?.trim() ?? ""),
+      reporting_category: (row.reporting_category || row.category || row.zone || "").trim() as ReportingCategory,
+      evidence_type: ((row.evidence_type || "Current").trim() || "Current") as EvidenceType,
+      assignment_type: ((row.assignment_type || "Diagnostic").trim() || "Diagnostic") as AssignmentType,
+      assignment_key: row.assignment_key?.trim() || inferredAssignmentKey(row.question_label || row.question_id || ""),
+      custom_weight: normalizedOptionalNumber(row.custom_weight) ?? 1,
     })),
   };
 }
@@ -105,6 +112,11 @@ export function normalizeQuestionMap(rows: Record<string, string>[]): { data: Qu
 function parseScore(value: string | undefined) {
   const parsed = Number(String(value ?? "").trim());
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizedOptionalNumber(value: string | undefined) {
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function round(value: number) {
@@ -131,7 +143,12 @@ export function normalizeQuestionId(label: string) {
   return label.trim().replace(/\s+/g, " ");
 }
 
-function createUnmappedQuestion(label: string, myopenmathId = "", pointsPossible = 1): QuestionMapItem {
+function inferredAssignmentKey(label: string) {
+  const match = String(label).match(/question\s+(\d+)[-.]/i);
+  return match?.[1] ? `Assignment ${match[1]}` : "";
+}
+
+function createUnmappedQuestion(label: string, myopenmathId = "", pointsPossible = 1, assignmentType: AssignmentType = "Diagnostic"): QuestionMapItem {
   return {
     question_id: normalizeQuestionId(label),
     question_label: normalizeQuestionId(label),
@@ -141,14 +158,21 @@ function createUnmappedQuestion(label: string, myopenmathId = "", pointsPossible
     teks: "Unmapped",
     zone: "Unmapped Questions",
     critical: false,
+    reporting_category: "Unmapped",
+    evidence_type: "Current",
+    assignment_type: assignmentType,
+    assignment_key: inferredAssignmentKey(label),
+    custom_weight: 1,
+    breakout_id: "",
+    teacher_description: "",
   };
 }
 
-export function createUnmappedQuestionMap(labels: { question_label: string; myopenmath_question_id?: string; points_possible?: number }[]): QuestionMapItem[] {
-  return labels.map((item) => createUnmappedQuestion(item.question_label, item.myopenmath_question_id, item.points_possible));
+export function createUnmappedQuestionMap(labels: { question_label: string; myopenmath_question_id?: string; points_possible?: number }[], assignmentType: AssignmentType = "Diagnostic"): QuestionMapItem[] {
+  return labels.map((item) => createUnmappedQuestion(item.question_label, item.myopenmath_question_id, item.points_possible, assignmentType));
 }
 
-export function mergeQuestionMapWithDetected(map: QuestionMapItem[], detected: { question_label: string; myopenmath_question_id?: string; points_possible?: number }[]) {
+export function mergeQuestionMapWithDetected(map: QuestionMapItem[], detected: { question_label: string; myopenmath_question_id?: string; points_possible?: number }[], assignmentType: AssignmentType = "Diagnostic") {
   const mapById = new Map(map.map((item) => [normalizeQuestionId(item.question_label || item.question_id), item]));
   return detected.map((question) => {
     const id = normalizeQuestionId(question.question_label);
@@ -160,8 +184,15 @@ export function mergeQuestionMapWithDetected(map: QuestionMapItem[], detected: {
           question_label: question.question_label,
           myopenmath_question_id: question.myopenmath_question_id || mapped.myopenmath_question_id,
           points_possible: question.points_possible ?? mapped.points_possible ?? 1,
+          reporting_category: mapped.reporting_category || mapped.zone,
+          evidence_type: mapped.evidence_type || "Current",
+          assignment_type: mapped.assignment_type || assignmentType,
+          assignment_key: mapped.assignment_key || inferredAssignmentKey(question.question_label),
+          custom_weight: mapped.custom_weight ?? 1,
+          breakout_id: mapped.breakout_id,
+          teacher_description: mapped.teacher_description,
         }
-      : createUnmappedQuestion(question.question_label, question.myopenmath_question_id, question.points_possible);
+      : createUnmappedQuestion(question.question_label, question.myopenmath_question_id, question.points_possible, assignmentType);
   });
 }
 

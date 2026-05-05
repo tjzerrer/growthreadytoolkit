@@ -1,4 +1,5 @@
 import type { DiagnosticResult, QuestionMapItem, RawAppData, Reflection, Student } from "./types";
+import { createStandardMapFromQuestions } from "./standards";
 
 export const defaultQuestionMap: QuestionMapItem[] = [
   ["Q1", "Integer Operations", "Readiness", "Number Sense", true],
@@ -27,6 +28,17 @@ export const defaultQuestionMap: QuestionMapItem[] = [
   teks: String(teks),
   zone: String(zone),
   critical: Boolean(critical),
+  reporting_category: String(zone).includes("Graphing")
+    ? "Describing and Graphing Linear Functions, Equations and Inequalities"
+    : String(zone).includes("Equations")
+      ? "Writing and Solving Linear Functions, Equations and Inequalities"
+      : String(zone).includes("Exponents")
+        ? "Exponential Functions and Equations"
+        : "Number and Algebraic Methods",
+  evidence_type: Number(String(question_id).replace("Q", "")) > 12 ? "Spiral Recent" : "Current",
+  assignment_type: Number(String(question_id).replace("Q", "")) > 10 ? "Quiz/Checkpoint" : "Diagnostic",
+  assignment_key: Number(String(question_id).replace("Q", "")) > 10 ? "Assignment 2" : "Assignment 1",
+  custom_weight: 1,
 }));
 
 const supports = ["small group", "worked examples", "partner practice", "video reteach"];
@@ -75,5 +87,5 @@ export function createDemoData(): RawAppData {
     });
   }
 
-  return { roster, diagnostics, questionMap: defaultQuestionMap, reflections, priorStaar };
+  return { roster, diagnostics, questionMap: defaultQuestionMap, standardMap: createStandardMapFromQuestions(defaultQuestionMap), reflections, priorStaar };
 }

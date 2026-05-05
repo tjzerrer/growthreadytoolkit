@@ -1,42 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { Button, EmptyState, PageHeader, TrajectoryBadge, TrajectoryDisclaimer } from "@/components/ui";
-import { exportClassSummary } from "@/lib/exports";
-import { useGrowthData } from "@/lib/useGrowthData";
+import { AuthGate } from "@/components/AuthGate";
+import { Card, PageHeader } from "@/components/ui";
+import { buildTeksMastery } from "@/lib/dbMastery";
 
 export default function ClassesPage() {
-  const { data, ready, settings } = useGrowthData();
-  if (ready && !data) return <EmptyState />;
-
   return (
     <>
-      <PageHeader title="All Algebra Classes" eyebrow="Class dashboard">
-        Compare readiness, strongest skills, weakest skills, and instructional next moves by period.
+      <PageHeader title="Classes" eyebrow="Database dashboard">
+        Class evidence, TEKS priorities, students needing help, and students ready for enrichment.
       </PageHeader>
-      <TrajectoryDisclaimer />
-      {data ? (
-        <>
-          <div className="mb-4"><Button onClick={() => exportClassSummary(data)} variant="soft">Export Class Summary CSV</Button></div>
-          <div className="card table-wrap rounded-3xl">
+      <AuthGate>
+        {(db) => (
+          <Card className="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>Class period</th><th>Dominant trajectory</th><th>Students</th><th>Average</th><th>Median</th><th>% Masters Traj.</th><th>% Meets Traj.</th><th>% Approaches Traj.</th><th>% DNM Risk</th><th>Weakest</th><th>Strongest</th><th>Intervention</th><th>Enrichment</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Class</th><th>Students</th><th>Evidence rows</th><th>Average</th><th>Priority TEKS</th><th>Enrichment-ready evidence</th></tr></thead>
               <tbody>
-                {data.classes.map((item) => (
-                  <tr key={item.period}>
-                    <td><Link className="font-black text-[#174a36] underline" href={`/classes/${encodeURIComponent(item.period)}`}>{item.label}</Link></td>
-                    <td><TrajectoryBadge trajectory={item.dominantTrajectory} settings={settings} /></td><td>{item.studentCount}</td><td>{item.averagePercent}%</td><td>{item.medianScore}</td><td>{item.trajectoryPercentages["Masters Trajectory"]}%</td><td>{item.trajectoryPercentages["Meets Trajectory"]}%</td><td>{item.trajectoryPercentages["Approaches Trajectory"]}%</td><td>{item.trajectoryPercentages["Did Not Meet Risk"]}%</td><td>{item.weakestSkill}</td><td>{item.strongestSkill}</td><td>{item.interventionCount}</td><td>{item.enrichmentCount}</td>
-                  </tr>
-                ))}
+                {db.snapshot.classes.map((klass) => {
+                  const evidence = db.snapshot.evidence.filter((row) => row.class_id === klass.id);
+                  const average = evidence.length ? Math.round(evidence.reduce((sum, row) => sum + row.percent, 0) / evidence.length * 10) / 10 : 0;
+                  const mastery = buildTeksMastery(db.snapshot, klass.id);
+                  return <tr key={klass.id}><td><Link className="font-black text-[#174a36] underline" href={`/classes/${klass.id}`}>{klass.name}</Link><br /><span className="text-sm text-[#647067]">{klass.period_label}</span></td><td>{db.snapshot.students.filter((student) => student.class_id === klass.id).length}</td><td>{evidence.length}</td><td>{average}%</td><td>{mastery.slice(0, 3).map((row) => `${row.teksCode} ${row.classAverage}%`).join(", ") || "No TEKS evidence"}</td><td>{mastery.filter((row) => row.status === "Mastered").length}</td></tr>;
+                })}
               </tbody>
             </table>
-          </div>
-        </>
-      ) : null}
+          </Card>
+        )}
+      </AuthGate>
     </>
   );
 }

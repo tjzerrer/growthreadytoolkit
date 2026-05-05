@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deriveData, getGrowthIndicator, getPriority, getReadinessBand, getStaarTrajectory } from "./calculations";
 import { createUnmappedQuestionMap, mergeQuestionMapWithDetected, parseCsvMatrixString, parseMyOpenMathDetailedRows } from "./csv";
 import { defaultQuestionMap } from "./demoData";
+import { createStandardMapFromQuestions, parseCombinedStandardTag } from "./standards";
 import type { DiagnosticResult, RawAppData } from "./types";
 
 function diagnostic(student_id: string, score: number): DiagnosticResult {
@@ -93,5 +94,42 @@ describe("GrowthReady calculations", () => {
     expect(getGrowthIndicator("Meets", "Meets Trajectory")).toBe("On Track");
     expect(getGrowthIndicator("Masters", "Meets Trajectory")).toBe("At Risk");
     expect(getGrowthIndicator(undefined, "Meets Trajectory")).toBe("Unknown");
+  });
+
+  it("parses combined standard tags with supported separators", () => {
+    expect(parseCombinedStandardTag("A.11A | Simplify square roots")).toEqual({
+      standard_code: "A.11A",
+      teacher_description: "Simplify square roots",
+    });
+    expect(parseCombinedStandardTag("A.3A - Determine slope from a graph")).toEqual({
+      standard_code: "A.3A",
+      teacher_description: "Determine slope from a graph",
+    });
+    expect(parseCombinedStandardTag("A.2B: Write linear equations")).toEqual({
+      standard_code: "A.2B",
+      teacher_description: "Write linear equations",
+    });
+  });
+
+  it("excludes blank standards from TEKS mastery while keeping overall scores", () => {
+    const questionMap = createUnmappedQuestionMap([{ question_label: "Question 1", myopenmath_question_id: "40451" }]);
+    const raw: RawAppData = {
+      roster: [],
+      diagnostics: [{
+        student_id: "S001",
+        first_name: "Test",
+        last_name: "Student",
+        class_period: "1",
+        answers: { "Question 1": 1 },
+        possiblePoints: { "Question 1": 1 },
+        attemptedQuestions: { "Question 1": true },
+      }],
+      questionMap,
+      standardMap: createStandardMapFromQuestions(questionMap),
+      reflections: [],
+    };
+    const data = deriveData(raw);
+    expect(data.students[0].percentage).toBe(100);
+    expect(data.teksProgress).toHaveLength(0);
   });
 });

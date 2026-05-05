@@ -1,4 +1,6 @@
 import { defaultSettings, gradeOrder, trajectoryOrder } from "./settings";
+import { applyStandardMap } from "./standards";
+import { buildBreakoutProgress, buildClassTeksSummary, buildTeksProgress } from "./teks";
 import type {
   AppSettings,
   ClassSummary,
@@ -14,6 +16,11 @@ import type {
   SkillMastery,
   StaarTrajectory,
   StudentProfile,
+  StudentTeksProgress,
+  StudentBreakoutProgress,
+  TeksProgress,
+  BreakoutProgress,
+  ReportingCategoryProgress,
 } from "./types";
 
 const round = (value: number) => Math.round(value * 10) / 10;
@@ -190,6 +197,9 @@ function buildStudentProfile(
   questionMap: QuestionMapItem[],
   appData: RawAppData,
   settings: AppSettings,
+  teksProgress: StudentTeksProgress[] = [],
+  breakoutProgress: StudentBreakoutProgress[] = [],
+  reportingCategoryStatus: ReportingCategoryProgress[] = [],
 ): StudentProfile {
   const attemptedQuestionCount = result.attemptedQuestionCount ?? questionMap.filter((q) => result.attemptedQuestions?.[q.question_id] ?? true).length;
   const incomplete = Boolean(result.incomplete || attemptedQuestionCount === 0);
@@ -245,6 +255,15 @@ function buildStudentProfile(
     { evidence: "Prior STAAR", value: priorStaar?.prior_performance_level || "Not uploaded", note: priorStaar?.prior_staar_year || "Growth indicator remains Unknown without prior data" },
   ];
   const parentSummary = `${result.first_name} is beginning Algebra 1 with strength in ${skillRank.strongest}. The main area for growth is ${skillRank.weakest}. The recommended next step is ${recommendedNextMove} We will continue tracking progress through short checks and targeted practice.`;
+  const strongestTeks = [...teksProgress].filter((row) => row.status !== "Not Enough Evidence").sort((a, b) => b.overallAverage - a.overallAverage)[0]?.teks ?? "Not enough data";
+  const weakestTeks = teksProgress[0]?.teks ?? "Not enough data";
+  const strongestReportingCategory = [...reportingCategoryStatus].sort((a, b) => b.average - a.average)[0]?.category ?? "Not enough data";
+  const weakestReportingCategory = [...reportingCategoryStatus].sort((a, b) => a.average - b.average)[0]?.category ?? "Not enough data";
+  const highestPriorityTeks = teksProgress.find((row) => ["Struggling", "Approaching", "Not Enough Evidence"].includes(row.status))?.teks ?? "Not enough data";
+  const highestPriorityBreakout = breakoutProgress.find((row) => ["Struggling", "Approaching", "Not Enough Evidence"].includes(row.status))?.breakoutId ?? "Not enough data";
+  const nextRecommendedSkill = teksProgress.find((row) => ["Struggling", "Approaching", "Not Enough Evidence"].includes(row.status))?.recommendedNextSkill
+    ?? breakoutProgress.find((row) => ["Struggling", "Approaching"].includes(row.status))?.teacherDescription
+    ?? "Maintain mastery through spiral review.";
 
   return {
     ...result,
@@ -273,6 +292,16 @@ function buildStudentProfile(
     evidenceTable,
     reflection,
     parentSummary,
+    teksProgress,
+    breakoutProgress,
+    reportingCategoryStatus,
+    strongestTeks,
+    weakestTeks,
+    nextRecommendedSkill,
+    strongestReportingCategory,
+    weakestReportingCategory,
+    highestPriorityTeks,
+    highestPriorityBreakout,
   };
 }
 
@@ -380,7 +409,15 @@ function classRecommendations(students: StudentProfile[], questionMap: QuestionM
   return recs.length ? recs : ["Use the weakest-skill group for targeted reteach, then reassess with a short exit ticket."];
 }
 
-function buildClassSummaries(students: StudentProfile[], questionMap: QuestionMapItem[], settings: AppSettings): ClassSummary[] {
+function buildClassSummaries(
+  students: StudentProfile[],
+  questionMap: QuestionMapItem[],
+  settings: AppSettings,
+  allTeksProgress: TeksProgress[] = [],
+  studentTeksRows: Record<string, StudentTeksProgress[]> = {},
+  allBreakouts: BreakoutProgress[] = [],
+  reportingCategories: ReportingCategoryProgress[] = [],
+): ClassSummary[] {
   return unique(students.map((s) => s.class_period)).map((period) => {
     const classStudents = students.filter((s) => s.class_period === period);
     const scoredClassStudents = classStudents.filter((s) => !s.incomplete);
@@ -397,6 +434,20 @@ function buildClassSummaries(students: StudentProfile[], questionMap: QuestionMa
     const trajectoryPercentages = Object.fromEntries(
       trajectoryOrder.map((trajectory) => [trajectory, pct(trajectoryCounts[trajectory], classStudents.length)]),
     ) as Record<StaarTrajectory, number>;
+    const classBreakouts = allBreakouts.map((breakout) => {
+      const classRows = classStudents.map((student) => student.breakoutProgress.find((row) => row.breakoutId === breakout.breakoutId)).filter(Boolean) as StudentBreakoutProgress[];
+      const average = round(classRows.reduce((sum, row) => sum + row.average, 0) / Math.max(classRows.length, 1));
+      return { ...breakout, average };
+    });
+    const spiralRetentionWarnings = questionMap
+      .filter((question) => question.evidence_type?.startsWith("Spiral"))
+      .map((question) => {
+        const currentQuestions = questionMap.filter((candidate) => candidate.teks === question.teks && candidate.evidence_type === "Current");
+        if (!currentQuestions.length) return "";
+        const current = round(classStudents.reduce((sum, student) => sum + masteryForQuestions(student, currentQuestions), 0) / Math.max(classStudents.length, 1));
+        const spiral = round(classStudents.reduce((sum, student) => sum + masteryForQuestions(student, [question]), 0) / Math.max(classStudents.length, 1));
+        return spiral + 10 < current ? `Spiral retention is lower than current-unit performance for ${question.teks}, suggesting students are not retaining this skill.` : "";
+      }).filter(Boolean).slice(0, 5);
     return {
       period,
       label: settings.classLabels[period] || (period === "Unassigned" ? "Unassigned" : `Period ${period}`),
@@ -416,16 +467,23 @@ function buildClassSummaries(students: StudentProfile[], questionMap: QuestionMa
       trajectoryPercentages,
       dominantTrajectory: trajectoryOrder.reduce((best, trajectory) => (trajectoryCounts[trajectory] > trajectoryCounts[best] ? trajectory : best), "Did Not Meet Risk" as StaarTrajectory),
       recommendations: classRecommendations(classStudents, questionMap),
+      teksSummary: buildClassTeksSummary(allTeksProgress, classStudents, studentTeksRows),
+      categoryMastery: reportingCategories,
+      weakBreakouts: classBreakouts.filter((row) => row.status !== "Not Enough Evidence").sort((a, b) => a.average - b.average).slice(0, 5),
+      strongBreakouts: classBreakouts.filter((row) => row.status !== "Not Enough Evidence").sort((a, b) => b.average - a.average).slice(0, 5),
+      spiralRetentionWarnings,
     };
   });
 }
 
 export function deriveData(appData: RawAppData, settings: AppSettings = defaultSettings): DerivedData {
   const diagnostics = appData.diagnostics.length ? appData.diagnostics : [];
-  const questionMap = appData.questionMap;
-  const students = diagnostics.map((result) => buildStudentProfile(result, questionMap, appData, settings));
+  const questionMap = applyStandardMap(appData.questionMap, appData.standardMap);
+  const teks = buildTeksProgress(diagnostics, questionMap, appData.assignmentType ?? "Diagnostic", appData.teksOverrides ?? []);
+  const breakouts = buildBreakoutProgress(diagnostics, questionMap, appData.assignmentType ?? "Diagnostic");
+  const students = diagnostics.map((result) => buildStudentProfile(result, questionMap, appData, settings, teks.studentRows[result.student_id] ?? [], breakouts.studentRows[result.student_id] ?? [], teks.categories));
   const skills = buildSkillMasteryForStudents(diagnostics, questionMap, settings).sort((a, b) => a.percentCorrect - b.percentCorrect);
-  const classes = buildClassSummaries(students, questionMap, settings);
+  const classes = buildClassSummaries(students, questionMap, settings, teks.allTeks, teks.studentRows, breakouts.allBreakouts, teks.categories);
   const groups = buildGroups(students);
   const scoredStudents = students.filter((student) => !student.incomplete);
   const trajectoryCounts = Object.fromEntries(
@@ -452,5 +510,5 @@ export function deriveData(appData: RawAppData, settings: AppSettings = defaultS
       .map((item) => ({ period: item.period, label: item.label, percentage: item.trajectoryPercentages["Masters Trajectory"] })),
   };
 
-  return { students, classes, skills, groups, summary };
+  return { students, classes, skills, teksProgress: teks.allTeks, reportingCategories: teks.categories, breakouts: breakouts.allBreakouts, groups, summary };
 }

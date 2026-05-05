@@ -1,7 +1,8 @@
 "use client";
 
 import { downloadCsv } from "./csv";
-import type { DerivedData } from "./types";
+import { standardMapToCsvRows } from "./standards";
+import type { DerivedData, QuestionStandardMap } from "./types";
 
 export function exportGroups(data: DerivedData) {
   downloadCsv(
@@ -82,4 +83,52 @@ export function exportSkills(data: DerivedData) {
       priority: skill.priority,
     })),
   );
+}
+
+export function exportReportingCategoryMastery(data: DerivedData) {
+  downloadCsv("growthready-reporting-category-mastery.csv", data.reportingCategories.map((category) => ({
+    category: category.category,
+    average: category.average,
+    mastered_pct: category.statusDistribution.Mastered,
+    proficient_pct: category.statusDistribution.Proficient,
+    approaching_pct: category.statusDistribution.Approaching,
+    struggling_pct: category.statusDistribution.Struggling,
+    not_enough_evidence_pct: category.statusDistribution["Not Enough Evidence"],
+    priority: category.priority,
+    suggested_next_action: category.suggestedNextAction,
+  })));
+}
+
+export function exportTeksMastery(data: DerivedData) {
+  downloadCsv("growthready-teks-mastery.csv", data.teksProgress.map((row) => ({
+    teks: row.teks,
+    teacher_description: row.teacherDescription,
+    skill: row.skill,
+    reporting_category: row.reportingCategory,
+    tagged_questions: row.taggedQuestionCount,
+    students_with_evidence: row.studentsWithEvidence,
+    average: row.average,
+    status: row.status,
+    movement: row.movement,
+    priority: row.priority,
+    recommended_move: row.recommendedMove,
+  })));
+}
+
+export function exportBreakoutMastery(data: DerivedData) {
+  downloadCsv("growthready-breakout-mastery.csv", data.breakouts.map((row) => ({
+    breakout_id: row.breakoutId,
+    teks: row.teks,
+    teacher_description: row.teacherDescription,
+    representation_type: row.representationType,
+    skill_type: row.skillType,
+    mapped_questions: row.mappedQuestions,
+    average: row.average,
+    status: row.status,
+    guidance: row.guidance,
+  })));
+}
+
+export function exportQuestionStandardMap(standardMap: QuestionStandardMap[] = []) {
+  downloadCsv("growthready-question-to-teks-breakout-map.csv", standardMapToCsvRows(standardMap));
 }

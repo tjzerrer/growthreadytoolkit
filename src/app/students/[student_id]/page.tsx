@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Badge, bandTone, Card, EmptyState, GrowthBadge, masteryColor, PageHeader, StatCard, TrajectoryBadge, TrajectoryDisclaimer } from "@/components/ui";
+import { Badge, bandTone, Card, EmptyState, GrowthBadge, masteryColor, movementTone, PageHeader, StatCard, teksStatusTone, TrajectoryBadge, TrajectoryDisclaimer } from "@/components/ui";
 import { loadNotes, saveNote } from "@/lib/storage";
+import type { TeksStatus } from "@/lib/types";
 import { useGrowthData } from "@/lib/useGrowthData";
+
+const teksStatusOptions: TeksStatus[] = ["Not Enough Evidence", "Struggling", "Approaching", "Proficient", "Mastered"];
 
 export default function StudentProfilePage() {
   const params = useParams<{ student_id: string }>();
   const studentId = params?.student_id ?? "";
-  const { data, ready, settings } = useGrowthData();
+  const { data, rawData, ready, saveData, settings } = useGrowthData();
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -18,6 +21,15 @@ export default function StudentProfilePage() {
 
   if (ready && !data) return <EmptyState />;
   const student = data?.students.find((item) => item.student_id === studentId);
+
+  function setTeacherOverride(teks: string, status: TeksStatus | "") {
+    if (!rawData) return;
+    const remaining = (rawData.teksOverrides ?? []).filter((override) => !(override.student_id === studentId && override.teks === teks));
+    saveData({
+      ...rawData,
+      teksOverrides: status ? [...remaining, { student_id: studentId, teks, status }] : remaining,
+    });
+  }
 
   return (
     <>
@@ -43,6 +55,13 @@ export default function StudentProfilePage() {
               <h2 className="mb-3 text-xl font-black text-[#174a36]">Instructional profile</h2>
               <p><strong>Strongest zone:</strong> {student.strongestZone}</p>
               <p><strong>Weakest zone:</strong> {student.weakestZone}</p>
+              <p><strong>Strongest TEKS:</strong> {student.strongestTeks}</p>
+              <p><strong>Weakest TEKS:</strong> {student.weakestTeks}</p>
+              <p><strong>Strongest reporting category:</strong> {student.strongestReportingCategory}</p>
+              <p><strong>Weakest reporting category:</strong> {student.weakestReportingCategory}</p>
+              <p><strong>Highest-priority TEKS:</strong> {student.highestPriorityTeks}</p>
+              <p><strong>Highest-priority breakout:</strong> {student.highestPriorityBreakout}</p>
+              <p><strong>Next recommended skill:</strong> {student.nextRecommendedSkill}</p>
               {student.email ? <p><strong>Email:</strong> {student.email}</p> : null}
               <p><strong>Attempted questions:</strong> {student.attemptedQuestionCount}</p>
               <p><strong>Missed critical questions:</strong> {student.missedCriticalQuestions.join(", ") || "None"}</p>
@@ -55,6 +74,51 @@ export default function StudentProfilePage() {
               <p className="text-[#4d5b52]">{student.parentSummary}</p>
             </Card>
           </section>
+
+          <Card className="mb-6 table-wrap">
+            <h2 className="mb-4 text-xl font-black text-[#174a36]">Reporting category status</h2>
+            <table>
+              <thead><tr><th>Category</th><th>Average</th><th>Priority</th><th>Suggested action</th></tr></thead>
+              <tbody>
+                {student.reportingCategoryStatus.map((row) => <tr key={row.category}><td className="font-black">{row.category}</td><td>{row.average}%</td><td>{row.priority}</td><td>{row.suggestedNextAction}</td></tr>)}
+              </tbody>
+            </table>
+          </Card>
+
+          <Card className="mb-6 table-wrap">
+            <h2 className="mb-4 text-xl font-black text-[#174a36]">TEKS progress</h2>
+            <table>
+              <thead><tr><th>TEKS</th><th>Status</th><th>Movement</th><th>Evidence count</th><th>Recent average</th><th>Teacher override</th><th>Next recommended skill</th></tr></thead>
+              <tbody>
+                {student.teksProgress.map((row) => (
+                  <tr key={row.teks}>
+                    <td className="font-black">{row.teks}<br /><span className="text-xs font-normal text-[#647067]">{row.teacherDescription || row.skill}</span></td>
+                    <td><Badge tone={teksStatusTone(row.status)}>{row.status}</Badge></td>
+                    <td><Badge tone={movementTone(row.movement)}>{row.movement}</Badge></td>
+                    <td>{row.evidenceCount}</td>
+                    <td>{row.recentAverage}%</td>
+                    <td>
+                      <select className="rounded-xl border border-[#d6cdbb] bg-white p-2" value={row.teacherOverride ?? ""} onChange={(event) => setTeacherOverride(row.teks, event.target.value as TeksStatus | "")}>
+                        <option value="">Use rule</option>
+                        {teksStatusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </td>
+                    <td>{row.recommendedNextSkill}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+
+          <Card className="mb-6 table-wrap">
+            <h2 className="mb-4 text-xl font-black text-[#174a36]">Breakout progress</h2>
+            <table>
+              <thead><tr><th>Breakout</th><th>TEKS</th><th>Status</th><th>Evidence</th><th>Average</th></tr></thead>
+              <tbody>
+                {student.breakoutProgress.map((row) => <tr key={row.breakoutId}><td className="font-black">{row.breakoutId}<br /><span className="text-xs font-normal text-[#647067]">{row.teacherDescription}</span></td><td>{row.teks}</td><td><Badge tone={teksStatusTone(row.status)}>{row.status}</Badge></td><td>{row.evidenceCount}</td><td>{row.average}%</td></tr>)}
+              </tbody>
+            </table>
+          </Card>
 
           <Card className="mb-6 table-wrap">
             <h2 className="mb-4 text-xl font-black text-[#174a36]">Skill mastery</h2>

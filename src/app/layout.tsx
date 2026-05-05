@@ -10,8 +10,12 @@ export const metadata: Metadata = {
 const navItems = [
   ["/", "Home"],
   ["/upload", "Upload"],
+  ["/teks-mapping", "Mapping"],
   ["/classes", "Classes"],
-  ["/skills", "Skills"],
+  ["/working-teks-list", "TEKS"],
+  ["/staar-blueprint", "Blueprint"],
+  ["/teks-library", "Library"],
+  ["/breakouts", "Breakouts"],
   ["/groups", "Groups"],
   ["/students", "Students"],
   ["/grade-structure", "Grades"],
