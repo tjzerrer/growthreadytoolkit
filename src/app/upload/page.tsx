@@ -119,7 +119,31 @@ export default function UploadPage() {
               setStatus("");
               return;
             }
+            const autoTagRows = (questionRows.data ?? []).flatMap((question) => {
+              const mapping = db.snapshot.problemMappings.find((item) => item.mom_question_id === question.mom_question_id);
+              return mapping ? [{
+                teacher_id: db.teacher?.id,
+                question_id: question.id,
+                raw_tag: mapping.raw_tag,
+                teks_code: mapping.teks_code,
+                skill_description: mapping.skill_description,
+                standard_type: mapping.standard_type,
+                priority: mapping.priority,
+                complexity: mapping.complexity,
+                reporting_category_id: mapping.reporting_category_id,
+                reporting_category_name: mapping.reporting_category_name,
+              }] : [];
+            });
+            if (autoTagRows.length) {
+              setStatus(`Applying ${autoTagRows.length} problem-bank mappings...`);
+              const autoTags = await db.supabase.from("question_tags").upsert(autoTagRows, { onConflict: "question_id" });
+              if (autoTags.error) throw autoTags.error;
+            }
             const questionIdByLabel = new Map((questionRows.data ?? []).map((question) => [question.mom_question_label, question.id]));
+            const teksByQuestionId = new Map((questionRows.data ?? []).map((question) => {
+              const mapping = db.snapshot.problemMappings.find((item) => item.mom_question_id === question.mom_question_id);
+              return [question.id, mapping?.teks_code ?? null];
+            }));
             setStatus("Saving evidence rows...");
             const evidenceRows = preview.diagnostics.flatMap((student) => preview.detectedQuestions.map((question) => {
               const score = Number(student.answers[question.question_id] ?? 0);
@@ -130,7 +154,7 @@ export default function UploadPage() {
                 class_id: classBySection.get(student.class_period || "Unassigned"),
                 assignment_id: assignment.data.id,
                 question_id: questionIdByLabel.get(question.question_label),
-                teks_code: null,
+                teks_code: teksByQuestionId.get(questionIdByLabel.get(question.question_label) || "") ?? null,
                 score,
                 points_possible: possible,
                 percent: possible ? Math.round((score / possible) * 1000) / 10 : 0,

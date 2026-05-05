@@ -1,4 +1,4 @@
-import type { DbAssignment, DbClass, DbEvidence, DbQuestion, DbQuestionTag, DbStudent } from "./supabase";
+import type { DbAssignment, DbClass, DbEvidence, DbProblemMapping, DbQuestion, DbQuestionTag, DbStudent } from "./supabase";
 
 export type MasteryStatus = "Mastered" | "Proficient" | "Approaching" | "Struggling" | "Not Enough Evidence";
 export type MovementLabel = "Improving" | "Stable" | "Slipping" | "Stuck" | "Not Enough Evidence";
@@ -9,6 +9,7 @@ export type DbSnapshot = {
   assignments: DbAssignment[];
   questions: DbQuestion[];
   questionTags: DbQuestionTag[];
+  problemMappings: DbProblemMapping[];
   evidence: DbEvidence[];
 };
 

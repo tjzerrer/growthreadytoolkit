@@ -167,6 +167,40 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["question_tags"]["Insert"]>;
         Relationships: [];
       };
+      problem_mappings: {
+        Row: {
+          id: string;
+          teacher_id: string | null;
+          mom_question_id: string;
+          raw_tag: string | null;
+          teks_code: string | null;
+          skill_description: string | null;
+          standard_type: string | null;
+          priority: string | null;
+          complexity: string | null;
+          reporting_category_id: number | null;
+          reporting_category_name: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          teacher_id?: string | null;
+          mom_question_id: string;
+          raw_tag?: string | null;
+          teks_code?: string | null;
+          skill_description?: string | null;
+          standard_type?: string | null;
+          priority?: string | null;
+          complexity?: string | null;
+          reporting_category_id?: number | null;
+          reporting_category_name?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["problem_mappings"]["Insert"]>;
+        Relationships: [];
+      };
       evidence: {
         Row: {
           id: string;

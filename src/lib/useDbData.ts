@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { hasSupabaseConfig, supabase, type DbAssignment, type DbClass, type DbEvidence, type DbQuestion, type DbQuestionTag, type DbStudent, type DbTeacher } from "./supabase";
+import { hasSupabaseConfig, supabase, type DbAssignment, type DbClass, type DbEvidence, type DbProblemMapping, type DbQuestion, type DbQuestionTag, type DbStudent, type DbTeacher } from "./supabase";
 import type { DbSnapshot } from "./dbMastery";
 
 type SessionUser = {
@@ -12,7 +12,7 @@ type SessionUser = {
 
 export function useDbData() {
   const [teacher, setTeacher] = useState<DbTeacher | null>(null);
-  const [snapshot, setSnapshot] = useState<DbSnapshot>({ classes: [], students: [], assignments: [], questions: [], questionTags: [], evidence: [] });
+  const [snapshot, setSnapshot] = useState<DbSnapshot>({ classes: [], students: [], assignments: [], questions: [], questionTags: [], problemMappings: [], evidence: [] });
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -43,13 +43,14 @@ export function useDbData() {
       setTeacher(profileRow);
       setReady(true);
       const profileUpsert = await supabase.from("profiles").upsert(profileRow, { onConflict: "id" });
-      const [profiles, classes, students, assignments, questions, questionTags, evidence] = await Promise.all([
+      const [profiles, classes, students, assignments, questions, questionTags, problemMappings, evidence] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         supabase.from("classes").select("*").order("period_label"),
         supabase.from("students").select("*").order("display_name"),
         supabase.from("assignments").select("*").order("date_administered", { ascending: false }),
         supabase.from("questions").select("*").order("mom_question_label"),
         supabase.from("question_tags").select("*"),
+        supabase.from("problem_mappings").select("*").order("mom_question_id"),
         supabase.from("evidence").select("*").order("date_administered", { ascending: false }),
       ]);
       setTeacher((profiles.data as DbTeacher) ?? profileRow);
@@ -59,9 +60,10 @@ export function useDbData() {
         assignments: (assignments.data ?? []) as DbAssignment[],
         questions: (questions.data ?? []) as DbQuestion[],
         questionTags: (questionTags.data ?? []) as DbQuestionTag[],
+        problemMappings: (problemMappings.data ?? []) as DbProblemMapping[],
         evidence: (evidence.data ?? []) as DbEvidence[],
       });
-      const dbErrors = [profileUpsert.error, profiles.error, classes.error, students.error, assignments.error, questions.error, questionTags.error, evidence.error].filter(Boolean);
+      const dbErrors = [profileUpsert.error, profiles.error, classes.error, students.error, assignments.error, questions.error, questionTags.error, problemMappings.error, evidence.error].filter(Boolean);
       setMessage(dbErrors.length ? `Signed in, but database setup needs attention: ${dbErrors[0]?.message}` : "");
     } catch (error) {
       setTeacher(null);
@@ -108,7 +110,7 @@ export function useDbData() {
     if (!supabase) return;
     await supabase.auth.signOut();
     setTeacher(null);
-    setSnapshot({ classes: [], students: [], assignments: [], questions: [], questionTags: [], evidence: [] });
+    setSnapshot({ classes: [], students: [], assignments: [], questions: [], questionTags: [], problemMappings: [], evidence: [] });
   };
 
   return useMemo(() => ({ hasSupabaseConfig, supabase, teacher, snapshot, ready, message, signIn, signInWithGoogle, signOut, refresh }), [teacher, snapshot, ready, message, refresh]);

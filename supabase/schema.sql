@@ -77,6 +77,23 @@ create table if not exists public.question_tags (
   unique(question_id)
 );
 
+create table if not exists public.problem_mappings (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid references public.profiles(id) on delete cascade,
+  mom_question_id text not null,
+  raw_tag text,
+  teks_code text,
+  skill_description text,
+  standard_type text,
+  priority text,
+  complexity text,
+  reporting_category_id integer,
+  reporting_category_name text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(teacher_id, mom_question_id)
+);
+
 create table if not exists public.evidence (
   id uuid primary key default gen_random_uuid(),
   teacher_id uuid references public.profiles(id) on delete cascade,
@@ -134,6 +151,9 @@ create trigger questions_set_updated_at before update on public.questions for ea
 drop trigger if exists question_tags_set_updated_at on public.question_tags;
 create trigger question_tags_set_updated_at before update on public.question_tags for each row execute function public.set_updated_at();
 
+drop trigger if exists problem_mappings_set_updated_at on public.problem_mappings;
+create trigger problem_mappings_set_updated_at before update on public.problem_mappings for each row execute function public.set_updated_at();
+
 drop trigger if exists prior_staar_data_set_updated_at on public.prior_staar_data;
 create trigger prior_staar_data_set_updated_at before update on public.prior_staar_data for each row execute function public.set_updated_at();
 
@@ -144,6 +164,8 @@ create index if not exists students_teacher_local_student_id_idx on public.stude
 create index if not exists assignments_teacher_id_idx on public.assignments(teacher_id);
 create index if not exists questions_assignment_id_idx on public.questions(assignment_id);
 create index if not exists question_tags_question_id_idx on public.question_tags(question_id);
+create index if not exists problem_mappings_teacher_id_idx on public.problem_mappings(teacher_id);
+create index if not exists problem_mappings_mom_question_id_idx on public.problem_mappings(mom_question_id);
 create index if not exists evidence_teacher_id_idx on public.evidence(teacher_id);
 create index if not exists evidence_student_id_idx on public.evidence(student_id);
 create index if not exists evidence_class_id_idx on public.evidence(class_id);
@@ -159,6 +181,7 @@ alter table public.students enable row level security;
 alter table public.assignments enable row level security;
 alter table public.questions enable row level security;
 alter table public.question_tags enable row level security;
+alter table public.problem_mappings enable row level security;
 alter table public.evidence enable row level security;
 alter table public.prior_staar_data enable row level security;
 
@@ -215,6 +238,15 @@ drop policy if exists "question_tags update own rows" on public.question_tags;
 create policy "question_tags update own rows" on public.question_tags for update using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
 drop policy if exists "question_tags delete own rows" on public.question_tags;
 create policy "question_tags delete own rows" on public.question_tags for delete using (teacher_id = auth.uid());
+
+drop policy if exists "problem_mappings select own rows" on public.problem_mappings;
+create policy "problem_mappings select own rows" on public.problem_mappings for select using (teacher_id = auth.uid());
+drop policy if exists "problem_mappings insert own rows" on public.problem_mappings;
+create policy "problem_mappings insert own rows" on public.problem_mappings for insert with check (teacher_id = auth.uid());
+drop policy if exists "problem_mappings update own rows" on public.problem_mappings;
+create policy "problem_mappings update own rows" on public.problem_mappings for update using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
+drop policy if exists "problem_mappings delete own rows" on public.problem_mappings;
+create policy "problem_mappings delete own rows" on public.problem_mappings for delete using (teacher_id = auth.uid());
 
 drop policy if exists "evidence select own rows" on public.evidence;
 create policy "evidence select own rows" on public.evidence for select using (teacher_id = auth.uid());

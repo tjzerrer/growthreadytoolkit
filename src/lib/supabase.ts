@@ -17,6 +17,7 @@ export type DbStudent = Tables<"students">;
 export type DbAssignment = Tables<"assignments">;
 export type DbQuestion = Tables<"questions">;
 export type DbQuestionTag = Tables<"question_tags">;
+export type DbProblemMapping = Tables<"problem_mappings">;
 export type DbEvidence = Tables<"evidence">;
 export type DbPriorStaarData = Tables<"prior_staar_data">;
 export type { Database };
